@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v2.3</title>
+    <title>BK v2.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -29,7 +29,7 @@
         import { createRoot } from 'react-dom/client';
         import { ChevronLeft, ChevronRight, Plus, Minus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2, StickyNote, FolderTree, Tag } from 'lucide-react';
 
-        const APP_VERSION = "v2.3";
+        const APP_VERSION = "v2.4";
         const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
         const FONT_LABELS = ['80%', '90%', '100%', '110%', '120%'];
 
@@ -38,13 +38,19 @@
             return new Intl.NumberFormat(currency === 'KRW' ? 'ko-KR' : 'zh-CN', options).format(amount);
         };
 
-        // [수정] 천 단위 포맷 추가
+        // [수정] 백 단위 포맷 추가
         const formatCompactNumber = (number) => {
             if (number === 0) return '-';
             const abs = Math.abs(number);
             
-            // 1천 미만
-            if (abs < 1000) return new Intl.NumberFormat('ko-KR').format(number);
+            // 100 미만
+            if (abs < 100) return new Intl.NumberFormat('ko-KR').format(number);
+
+            // 100 이상 ~ 1천 미만 (백 단위)
+            if (abs < 1000) {
+                 const val = number / 100;
+                 return val.toFixed(val % 1 === 0 ? 0 : 1) + '백';
+            }
             
             // 1천 이상 ~ 1만 미만 (천 단위)
             if (abs < 10000) {
@@ -268,12 +274,6 @@
             const categoryStats = useMemo(() => {
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                 const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
-                const prevDate = new Date(year, month - 1, 1);
-                const prevYear = prevDate.getFullYear();
-                const prevMonth = prevDate.getMonth();
-                const prevStartStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
-                const prevEndStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-31`;
-
                 let carryover = Number(initialBalance);
                 transactions.forEach(t => {
                     if (t.date < startStr) {
@@ -283,7 +283,12 @@
                 });
 
                 const currentMonthTrans = transactions.filter(t => t.date >= startStr && t.date <= endStr);
-                const prevMonthTrans = transactions.filter(t => t.date >= prevStartStr && t.date <= prevEndStr);
+                const prevMonthTrans = transactions.filter(t => {
+                    const prevDate = new Date(year, month - 1, 1);
+                    const prevStart = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-01`;
+                    const prevEnd = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-31`;
+                    return t.date >= prevStart && t.date <= prevEnd;
+                });
 
                 const hierarchy = { income: {}, expense: {} };
 
@@ -294,15 +299,11 @@
                         const subCat = t.category || '기타';
                         const amt = Number(t.amount);
 
-                        if (!hierarchy[type][mainCat]) {
-                            hierarchy[type][mainCat] = { total: 0, prev: 0, subs: {} };
-                        }
+                        if (!hierarchy[type][mainCat]) hierarchy[type][mainCat] = { total: 0, prev: 0, subs: {} };
                         if (isPrev) hierarchy[type][mainCat].prev += amt;
                         else hierarchy[type][mainCat].total += amt;
 
-                        if (!hierarchy[type][mainCat].subs[subCat]) {
-                            hierarchy[type][mainCat].subs[subCat] = { total: 0, prev: 0 };
-                        }
+                        if (!hierarchy[type][mainCat].subs[subCat]) hierarchy[type][mainCat].subs[subCat] = { total: 0, prev: 0 };
                         if (isPrev) hierarchy[type][mainCat].subs[subCat].prev += amt;
                         else hierarchy[type][mainCat].subs[subCat].total += amt;
                     });
@@ -312,14 +313,10 @@
                 processTrans(prevMonthTrans, true);
 
                 const sortHierarchy = (data) => {
-                    return Object.entries(data)
-                        .map(([key, val]) => {
-                            const sortedSubs = Object.entries(val.subs)
-                                .map(([subKey, subVal]) => ({ name: subKey, ...subVal }))
-                                .sort((a, b) => b.total - a.total);
-                            return { name: key, ...val, subs: sortedSubs };
-                        })
-                        .sort((a, b) => b.total - a.total);
+                    return Object.entries(data).map(([key, val]) => {
+                        const sortedSubs = Object.entries(val.subs).map(([subKey, subVal]) => ({ name: subKey, ...subVal })).sort((a, b) => b.total - a.total);
+                        return { name: key, ...val, subs: sortedSubs };
+                    }).sort((a, b) => b.total - a.total);
                 };
 
                 const monthlyIncome = currentMonthTrans.filter(t => t.type === 'income').reduce((a, b) => a + Number(b.amount), 0);
@@ -330,11 +327,7 @@
                 return {
                     income: sortHierarchy(hierarchy.income),
                     expense: sortHierarchy(hierarchy.expense),
-                    monthlyIncome,
-                    monthlyExpense,
-                    carryover,
-                    totalRevenue, 
-                    finalBalance 
+                    monthlyIncome, monthlyExpense, carryover, totalRevenue, finalBalance 
                 };
             }, [transactions, year, month, initialBalance]);
 
@@ -354,40 +347,23 @@
             const handleSaveTransaction = (e) => {
                 e.preventDefault();
                 if (!newTrans.amount || !newTrans.desc) return;
-                
                 const currentMainCats = newTrans.type === 'income' ? mainCategories.income : mainCategories.expense;
                 const currentSubCats = newTrans.type === 'income' ? categories.income : categories.expense;
-
                 const transToSave = { 
                     ...newTrans, 
                     mainCategory: newTrans.mainCategory || (currentMainCats[0] || '기타'),
                     category: newTrans.category || (currentSubCats[0] || '기타'),
                     amount: Number(newTrans.amount) 
                 };
-
-                if (editingId) {
-                    setTransactions(prev => prev.map(t => t.id === editingId ? { ...transToSave, id: editingId } : t));
-                } else {
-                    setTransactions([...transactions, { id: Date.now(), ...transToSave }]);
-                }
-                setIsModalOpen(false); setEditingId(null); 
-                setNewTrans({ ...newTrans, amount: '', desc: '', category: '', mainCategory: '', memo: '' }); 
-                setSelectedDateDetail(null);
+                if (editingId) setTransactions(prev => prev.map(t => t.id === editingId ? { ...transToSave, id: editingId } : t));
+                else setTransactions([...transactions, { id: Date.now(), ...transToSave }]);
+                setIsModalOpen(false); setEditingId(null); setNewTrans({ ...newTrans, amount: '', desc: '', category: '', mainCategory: '', memo: '' }); setSelectedDateDetail(null);
             };
 
             const handleEditClick = (transaction) => {
                 setEditingId(transaction.id);
-                setNewTrans({ 
-                    date: transaction.date, 
-                    type: transaction.type, 
-                    amount: transaction.amount, 
-                    desc: transaction.desc, 
-                    category: transaction.category || '',
-                    mainCategory: transaction.mainCategory || '',
-                    memo: transaction.memo || ''
-                });
-                setIsModalOpen(true);
-                setSelectedDateDetail(null);
+                setNewTrans({ date: transaction.date, type: transaction.type, amount: transaction.amount, desc: transaction.desc, category: transaction.category || '', mainCategory: transaction.mainCategory || '', memo: transaction.memo || '' });
+                setIsModalOpen(true); setSelectedDateDetail(null);
             };
 
             const handleDelete = (id) => {
@@ -514,7 +490,6 @@
                     </header>
 
                     <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
-                        {/* 1. 상단 대시보드 */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div className={`md:col-span-2 rounded-xl border p-4 ${theme.card}`}>
                                 <div className="flex justify-between items-center mb-4">
@@ -545,7 +520,6 @@
                             </div>
                         </div>
 
-                        {/* 탭 메뉴 */}
                         <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-800">
                             <button onClick={() => setActiveTab('calendar')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'calendar' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><LayoutGrid size={18} />달력</button>
                             <button onClick={() => setActiveTab('list')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'list' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><List size={18} />목록</button>
@@ -553,7 +527,6 @@
                             <button onClick={() => setActiveTab('yearly')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'yearly' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><Table2 size={18} />연간</button>
                         </div>
 
-                        {/* 캘린더 뷰 */}
                         {activeTab === 'calendar' && (
                             <div className={`rounded-xl shadow border overflow-hidden ${theme.card}`}>
                                 <div className={`grid grid-cols-7 border-b ${theme.border} ${theme.th}`}>
@@ -571,7 +544,7 @@
                                             <div key={item.dateStr} onClick={() => handleDateClick(item.dateStr)} className={`min-h-[100px] sm:min-h-[140px] p-1 border-b border-r last:border-r-0 relative cursor-pointer ${theme.gridLine} ${theme.hover} ${isToday ? theme.today : ''}`}>
                                                 <div className="flex flex-col sm:flex-row justify-between items-start mb-1">
                                                     <span className={`text-[10px] sm:text-sm font-medium w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : theme.subText}`}>{item.day}</span>
-                                                    {/* [수정] 잔액 색상 조건: 음수면 빨강, 아니면 흰색 */}
+                                                    {/* [수정] 잔액 색상 조건: 음수 빨강, 아니면 흰색 */}
                                                     <span className={`text-[8px] sm:text-[10px] px-1 rounded ${currentBalance < 0 ? 'text-rose-500 font-bold' : 'text-white'}`}>{formatCurrency(currentBalance, currency)}</span>
                                                 </div>
                                                 <div className="flex flex-col gap-0.5 overflow-hidden h-[70px] sm:h-[90px] overflow-y-auto scrollbar-hide">
@@ -592,7 +565,6 @@
                             </div>
                         )}
 
-                        {/* 리스트 뷰 */}
                         {activeTab === 'list' && (
                             <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
                                 <div className="space-y-3">
@@ -601,10 +573,9 @@
                                             <div>
                                                 <p className={`text-xs ${theme.subText} mb-0.5`}>{t.date}</p>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-400`}>{t.mainCategory || '기타'}</span>
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${t.type === 'income' ? 'border-blue-500 text-blue-500' : 'border-rose-500 text-rose-500'}`}>{t.category}</span>
+                                                    <p className={`font-medium ${theme.cardText}`}>{t.desc}</p>
                                                 </div>
-                                                <p className={`font-medium ${theme.cardText}`}>{t.desc}</p>
                                                 {t.memo && <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1"><StickyNote size={10}/> {t.memo}</p>}
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -618,7 +589,6 @@
                             </div>
                         )}
 
-                        {/* 통계 뷰 */}
                         {activeTab === 'stats' && (
                             <div className="space-y-6 animate-in fade-in zoom-in duration-200">
                                 <div className={`rounded-xl shadow border p-5 ${theme.card}`}>
@@ -708,7 +678,7 @@
                             </div>
                         )}
 
-                        {/* 연간 뷰 (계층형 테이블) */}
+                        {/* 연간 뷰 (계층형 테이블 - 좌측 정렬 및 너비 확장) */}
                         {activeTab === 'yearly' && (
                             <div className={`rounded-xl shadow border p-5 animate-in fade-in zoom-in duration-200 ${theme.card}`}>
                                 <div className="flex justify-between items-center mb-6">
@@ -720,91 +690,98 @@
                                 </div>
                                 
                                 <div className="overflow-x-auto border border-neutral-800 rounded-lg">
-                                    <table className="w-full text-xs text-left min-w-[800px]">
+                                    <table className="w-full text-xs text-left min-w-[1000px]">
                                         <thead className={`bg-neutral-900 ${theme.subText}`}>
                                             <tr>
-                                                <th className="px-3 py-2 sticky left-0 bg-neutral-900 z-20 border-r border-neutral-800 font-bold text-gray-300">구분</th>
+                                                {/* 구분 항목 너비 확장 및 줄바꿈 방지 */}
+                                                <th className="px-3 py-2 sticky left-0 bg-neutral-900 z-20 border-r border-neutral-800 font-bold text-gray-300 min-w-[150px] whitespace-nowrap">구분</th>
                                                 {[...Array(12)].map((_, i) => <th key={i} className="px-2 py-2 text-center border-r border-neutral-800 last:border-0 w-[60px] font-medium">{i+1}월</th>)}
-                                                <th className="px-3 py-2 text-right bg-neutral-900 sticky right-0 border-l border-neutral-800 z-20 font-bold text-gray-300">합계</th>
+                                                <th className="px-3 py-2 text-left bg-neutral-900 sticky right-0 border-l border-neutral-800 z-20 font-bold text-gray-300">합계</th>
                                             </tr>
                                         </thead>
                                         <tbody className={`divide-y divide-neutral-800 ${theme.cardText}`}>
+                                            {/* 월별 요약 섹션 */}
                                             <tr className="bg-neutral-800/80 font-bold">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-gray-400">전월 이월</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-gray-400 whitespace-nowrap">전월 이월</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-gray-400">{formatCompactNumber(stat.carryover)}</td>
+                                                    // [수정] 금액 좌측 정렬 (text-left)
+                                                    <td key={i} className="px-2 py-2 text-left border-r border-neutral-800 text-gray-400">{formatCompactNumber(stat.carryover)}</td>
                                                 ))}
-                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-gray-400">-</td>
+                                                <td className="px-3 py-2 text-left sticky right-0 bg-neutral-800 border-l border-neutral-700 text-gray-400">-</td>
                                             </tr>
                                             <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-blue-400">월 수입</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-blue-400 whitespace-nowrap">월 수입</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-blue-400">{formatCompactNumber(stat.income)}</td>
+                                                    <td key={i} className="px-2 py-2 text-left border-r border-neutral-800 text-blue-400">{formatCompactNumber(stat.income)}</td>
                                                 ))}
-                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-blue-400">
+                                                <td className="px-3 py-2 text-left sticky right-0 bg-neutral-800 border-l border-neutral-700 text-blue-400">
                                                     {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.income, 0))}
                                                 </td>
                                             </tr>
                                             <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-rose-400">월 지출</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-rose-400 whitespace-nowrap">월 지출</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-rose-400">{formatCompactNumber(stat.expense)}</td>
+                                                    <td key={i} className="px-2 py-2 text-left border-r border-neutral-800 text-rose-400">{formatCompactNumber(stat.expense)}</td>
                                                 ))}
-                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-rose-400">
+                                                <td className="px-3 py-2 text-left sticky right-0 bg-neutral-800 border-l border-neutral-700 text-rose-400">
                                                     {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.expense, 0))}
                                                 </td>
                                             </tr>
                                             <tr className="bg-neutral-800/80 font-bold border-b-2 border-neutral-700">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-white">월 잔액</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-white whitespace-nowrap">월 잔액</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 ${stat.balance >= 0 ? 'text-blue-300' : 'text-rose-300'}`}>
+                                                    <td key={i} className={`px-2 py-2 text-left border-r border-neutral-800 ${stat.balance >= 0 ? 'text-blue-300' : 'text-rose-300'}`}>
                                                         {formatCompactNumber(stat.balance)}
                                                     </td>
                                                 ))}
-                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-white">
+                                                <td className="px-3 py-2 text-left sticky right-0 bg-neutral-800 border-l border-neutral-700 text-white">
                                                     {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.balance, 0))}
                                                 </td>
                                             </tr>
 
-                                            <tr className="bg-blue-900/30 font-bold border-b border-blue-900"><td colSpan="14" className="px-3 py-2 text-blue-400">수입 내역</td></tr>
+                                            {/* 수입 계층형 테이블 */}
+                                            <tr className="bg-blue-900/30 font-bold border-b border-blue-900"><td colSpan="14" className="px-3 py-2 text-blue-400 whitespace-nowrap">수입 내역</td></tr>
                                             {Object.entries(yearlyStats.hierarchyData.income).map(([mainCat, data]) => (
                                                 <React.Fragment key={mainCat}>
                                                     <tr className="bg-neutral-800/30 font-bold">
-                                                        <td className="px-3 py-2 sticky left-0 bg-neutral-900 z-10 border-r border-neutral-800 text-blue-200 pl-4 border-l-4 border-l-blue-500">{mainCat}</td>
+                                                        <td className="px-3 py-2 sticky left-0 bg-neutral-900 z-10 border-r border-neutral-800 text-blue-200 pl-4 border-l-4 border-l-blue-500 whitespace-nowrap">{mainCat}</td>
                                                         {data.monthly.map((amt, i) => (
-                                                            <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-blue-200">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
+                                                            <td key={i} className="px-2 py-2 text-left border-r border-neutral-800 text-blue-200">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
                                                         ))}
-                                                        <td className="px-3 py-2 text-right sticky right-0 bg-neutral-900 border-l border-neutral-800 text-blue-200">{formatCompactNumber(data.total)}</td>
+                                                        <td className="px-3 py-2 text-left sticky right-0 bg-neutral-900 border-l border-neutral-800 text-blue-200">{formatCompactNumber(data.total)}</td>
                                                     </tr>
                                                     {Object.entries(data.subs).map(([subCat, subData]) => (
                                                         <tr key={`${mainCat}-${subCat}`} className="hover:bg-neutral-800/50 text-neutral-400">
-                                                            <td className="px-3 py-1.5 sticky left-0 bg-black z-10 border-r border-neutral-800 pl-8 text-[10px] sm:text-xs">└ {subCat}</td>
+                                                            {/* [수정] ㄴ 삭제, padding-left 유지 */}
+                                                            <td className="px-3 py-1.5 sticky left-0 bg-black z-10 border-r border-neutral-800 pl-8 text-[10px] sm:text-xs whitespace-nowrap">{subCat}</td>
                                                             {subData.monthly.map((amt, i) => (
-                                                                <td key={i} className="px-2 py-1.5 text-center border-r border-neutral-800">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
+                                                                <td key={i} className="px-2 py-1.5 text-left border-r border-neutral-800">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
                                                             ))}
-                                                            <td className="px-3 py-1.5 text-right sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(subData.total)}</td>
+                                                            <td className="px-3 py-1.5 text-left sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(subData.total)}</td>
                                                         </tr>
                                                     ))}
                                                 </React.Fragment>
                                             ))}
 
-                                            <tr className="bg-rose-900/30 font-bold border-b border-rose-900"><td colSpan="14" className="px-3 py-2 text-rose-400">지출 내역</td></tr>
+                                            {/* 지출 계층형 테이블 */}
+                                            <tr className="bg-rose-900/30 font-bold border-b border-rose-900"><td colSpan="14" className="px-3 py-2 text-rose-400 whitespace-nowrap">지출 내역</td></tr>
                                             {Object.entries(yearlyStats.hierarchyData.expense).map(([mainCat, data]) => (
                                                 <React.Fragment key={mainCat}>
                                                     <tr className="bg-neutral-800/30 font-bold">
-                                                        <td className="px-3 py-2 sticky left-0 bg-neutral-900 z-10 border-r border-neutral-800 text-rose-200 pl-4 border-l-4 border-l-rose-500">{mainCat}</td>
+                                                        <td className="px-3 py-2 sticky left-0 bg-neutral-900 z-10 border-r border-neutral-800 text-rose-200 pl-4 border-l-4 border-l-rose-500 whitespace-nowrap">{mainCat}</td>
                                                         {data.monthly.map((amt, i) => (
-                                                            <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-rose-200">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
+                                                            <td key={i} className="px-2 py-2 text-left border-r border-neutral-800 text-rose-200">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
                                                         ))}
-                                                        <td className="px-3 py-2 text-right sticky right-0 bg-neutral-900 border-l border-neutral-800 text-rose-200">{formatCompactNumber(data.total)}</td>
+                                                        <td className="px-3 py-2 text-left sticky right-0 bg-neutral-900 border-l border-neutral-800 text-rose-200">{formatCompactNumber(data.total)}</td>
                                                     </tr>
                                                     {Object.entries(data.subs).map(([subCat, subData]) => (
                                                         <tr key={`${mainCat}-${subCat}`} className="hover:bg-neutral-800/50 text-neutral-400">
-                                                            <td className="px-3 py-1.5 sticky left-0 bg-black z-10 border-r border-neutral-800 pl-8 text-[10px] sm:text-xs">└ {subCat}</td>
+                                                            {/* [수정] ㄴ 삭제 */}
+                                                            <td className="px-3 py-1.5 sticky left-0 bg-black z-10 border-r border-neutral-800 pl-8 text-[10px] sm:text-xs whitespace-nowrap">{subCat}</td>
                                                             {subData.monthly.map((amt, i) => (
-                                                                <td key={i} className="px-2 py-1.5 text-center border-r border-neutral-800">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
+                                                                <td key={i} className="px-2 py-1.5 text-left border-r border-neutral-800">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
                                                             ))}
-                                                            <td className="px-3 py-1.5 text-right sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(subData.total)}</td>
+                                                            <td className="px-3 py-1.5 text-left sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(subData.total)}</td>
                                                         </tr>
                                                     ))}
                                                 </React.Fragment>
@@ -882,7 +859,6 @@
                                         <div className="flex-1"><label className={`text-xs block mb-1 ${theme.subText}`}>유형</label><div className="flex gap-1"><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'income' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'income' ? 'bg-blue-600 text-white' : theme.input}`}>수입</button><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'expense' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'expense' ? 'bg-rose-600 text-white' : theme.input}`}>지출</button></div></div>
                                     </div>
                                     <div className="flex gap-2">
-                                        {/* 대항목 선택 */}
                                         <div className="flex-1">
                                             <label className={`text-xs block mb-1 ${theme.subText}`}>대항목</label>
                                             <select value={newTrans.mainCategory} onChange={(e) => setNewTrans({ ...newTrans, mainCategory: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
@@ -891,7 +867,6 @@
                                                 ))}
                                             </select>
                                         </div>
-                                        {/* 소항목 선택 */}
                                         <div className="flex-1">
                                             <label className={`text-xs block mb-1 ${theme.subText}`}>소항목</label>
                                             <select value={newTrans.category} onChange={(e) => setNewTrans({ ...newTrans, category: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
