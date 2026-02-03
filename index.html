@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v1.5</title>
+    <title>BK v1.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -30,16 +30,20 @@
         import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart } from 'lucide-react';
 
         // --- 버전 관리 상수 ---
-        const APP_VERSION = "v1.5";
+        const APP_VERSION = "v1.6";
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
             return new Intl.NumberFormat(currency === 'KRW' ? 'ko-KR' : 'zh-CN', options).format(amount);
         };
 
-        // 숫자를 짧게 줄여주는 헬퍼 (그래프 내부용) e.g., 15000 -> 1.5만 (공간 절약)
+        // 숫자를 짧게 줄여주는 헬퍼 (예: 110000 -> 11만, 57000 -> 5.7만)
         const formatCompactNumber = (number) => {
-            return new Intl.NumberFormat('ko-KR', { notation: "compact", maximumFractionDigits: 1 }).format(number);
+            if (number === 0) return '';
+            // 1만 미만은 그대로, 이상은 '만' 단위 축약
+            if (Math.abs(number) < 10000) return new Intl.NumberFormat('ko-KR').format(number);
+            const val = number / 10000;
+            return val.toFixed(val % 1 === 0 ? 0 : 1) + '만';
         };
 
         const generateCalendarDays = (year, month) => {
@@ -178,29 +182,23 @@
                 return { income, expense, balance };
             }, [transactions, initialBalance]);
 
-            // [수정] 연간 통계 + 카테고리별 통계 계산
             const yearlyStats = useMemo(() => {
-                // 1. 월별 전체 수입/지출 (그래프용)
-                const monthlyData = Array(12).fill(null).map((_, i) => ({ month: i + 1, income: 0, expense: 0 }));
-                
-                // 2. 카테고리별 월별 데이터 (테이블용)
-                // 구조: { '식비': [1월금액, 2월금액, ...], '교통': [...] }
+                const monthlyData = Array(12).fill(null).map((_, i) => ({ month: i + 1, income: 0, expense: 0, balance: 0 }));
                 const categoryData = { income: {}, expense: {} };
                 
-                // 초기화
                 categories.income.forEach(cat => categoryData.income[cat] = Array(12).fill(0));
                 categories.expense.forEach(cat => categoryData.expense[cat] = Array(12).fill(0));
 
                 const yearTransactions = transactions.filter(t => t.date.startsWith(String(year)));
                 
                 yearTransactions.forEach(t => {
-                    const m = new Date(t.date).getMonth(); // 0~11
+                    const m = new Date(t.date).getMonth(); 
                     const cat = t.category || '기타';
                     const amt = Number(t.amount);
 
                     if (t.type === 'income') {
                         monthlyData[m].income += amt;
-                        if (!categoryData.income[cat]) categoryData.income[cat] = Array(12).fill(0); // 혹시 삭제된 카테고리 대비
+                        if (!categoryData.income[cat]) categoryData.income[cat] = Array(12).fill(0);
                         categoryData.income[cat][m] += amt;
                     } else {
                         monthlyData[m].expense += amt;
@@ -209,15 +207,71 @@
                     }
                 });
 
-                // 그래프 스케일링용 최대값
                 let maxVal = 0;
                 monthlyData.forEach(s => {
+                    s.balance = s.income - s.expense;
                     if (s.income > maxVal) maxVal = s.income;
                     if (s.expense > maxVal) maxVal = s.expense;
+                    // 잔액이 매우 클 수 있으므로 잔액도 최대값 계산에 포함 (선 그래프 스케일링)
+                    if (Math.abs(s.balance) > maxVal) maxVal = Math.abs(s.balance);
                 });
 
-                return { monthlyData, categoryData, maxVal: maxVal || 1 }; 
+                // 그래프 여백을 위해 maxVal 약간 증가
+                maxVal = maxVal * 1.1 || 1;
+
+                return { monthlyData, categoryData, maxVal }; 
             }, [transactions, year, categories]);
+
+            // SVG용 Path 생성 (부드러운 곡선)
+            const getSmoothPath = (data, maxVal, width, height) => {
+                if (data.length === 0) return "";
+                
+                const points = data.map((d, i) => {
+                    const x = (i / 11) * width; // 12개월 분할
+                    // Y축: 값 0이 height(바닥)이 아니라 중간일 수도 있음? 아니 보통 0이 바닥. 
+                    // 하지만 잔액은 음수일 수도 있음. 여기서는 막대그래프와 동일하게 0을 바닥으로 둠. 음수는 무시하거나 0으로 처리?
+                    // 요청상 "월간 잔액"이므로 양수일 확률 높음. 0 이하는 바닥에 붙임.
+                    const val = Math.max(0, d.balance);
+                    const y = height - (val / maxVal) * height;
+                    return [x, y];
+                });
+
+                if (points.length === 1) return `M ${points[0][0]},${points[0][1]}`;
+
+                // Catmull-Rom to Cubic Bezier conversion logic simplified
+                const line = (pointA, pointB) => {
+                    const lengthX = pointB[0] - pointA[0];
+                    const lengthY = pointB[1] - pointA[1];
+                    return {
+                        length: Math.sqrt(Math.pow(lengthX, 2) + Math.pow(lengthY, 2)),
+                        angle: Math.atan2(lengthY, lengthX)
+                    };
+                };
+
+                const controlPoint = (current, previous, next, reverse) => {
+                    const p = previous || current;
+                    const n = next || current;
+                    const o = line(p, n);
+                    const angle = o.angle + (reverse ? Math.PI : 0);
+                    const length = o.length * 0.2;
+                    const x = current[0] + Math.cos(angle) * length;
+                    const y = current[1] + Math.sin(angle) * length;
+                    return [x, y];
+                };
+
+                const bezierCommand = (point, i, a) => {
+                    const cps = controlPoint(a[i - 1], a[i - 2], point);
+                    const cpe = controlPoint(point, a[i - 1], a[i + 1], true);
+                    return `C ${cps[0]},${cps[1]} ${cpe[0]},${cpe[1]} ${point[0]},${point[1]}`;
+                };
+
+                const d = points.reduce((acc, point, i, a) => i === 0
+                    ? `M ${point[0]},${point[1]}`
+                    : `${acc} ${bezierCommand(point, i, a)}`
+                , "");
+                
+                return d;
+            };
 
             const categoryStats = useMemo(() => {
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
@@ -365,9 +419,7 @@
                 const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
                 const prevVal = prevMap[category] || 0;
                 const diff = currentVal - prevVal;
-                
                 let diffText = <span className="text-gray-500">-</span>;
-                
                 if (diff > 0) {
                     const colorClass = type === 'income' ? 'text-blue-500' : 'text-rose-500';
                     diffText = <span className={colorClass}>▲{formatCurrency(diff, currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
@@ -375,7 +427,6 @@
                     const colorClass = type === 'income' ? 'text-rose-500' : 'text-blue-500';
                     diffText = <span className={colorClass}>▼{formatCurrency(Math.abs(diff), currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
                 }
-
                 return (
                     <div className="flex items-center gap-2 text-[10px] sm:text-xs">
                         <span className="text-gray-400">전월 {formatCurrency(prevVal, currency).replace(/[₩¥CNY]/g, '').trim()}</span>
@@ -406,7 +457,6 @@
                     <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
                         {/* 1. 상단 대시보드 */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            {/* 좌측: 이번 달 현황 */}
                             <div className={`md:col-span-2 rounded-xl border p-4 ${theme.card}`}>
                                 <div className="flex justify-between items-center mb-4">
                                     <div className="flex items-center gap-2">
@@ -425,7 +475,6 @@
                                 </div>
                                 <div className="sm:hidden mt-2 pt-2 border-t border-neutral-800 flex justify-between text-xs px-2"><span className={theme.subText}>총수입 (이월+수입)</span><span className={theme.cardText}>{formatCurrency(categoryStats.totalRevenue, currency)}</span></div>
                             </div>
-                            {/* 우측: 누적 총 자산 */}
                             <div className={`md:col-span-1 rounded-xl border p-4 flex flex-col justify-center relative overflow-hidden ${isDarkMode ? 'bg-blue-900/10 border-blue-800/30' : 'bg-blue-50 border-blue-200'}`}>
                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-500/20"><Layers size={16} className="text-blue-500"/><span className={`text-xs font-bold uppercase tracking-wider ${theme.subText}`}>전체 누적 현황</span></div>
@@ -593,42 +642,94 @@
                                     <span className={`text-xs ${theme.subText}`}>1월 - 12월</span>
                                 </div>
                                 
-                                {/* 1. 고도화된 연간 그래프 (두꺼운 막대 + 내부 세로 텍스트) */}
+                                {/* SVG 차트 (막대 + 곡선) */}
                                 <div className="overflow-x-auto pb-4 mb-6">
-                                    <div className="flex items-end gap-4 min-w-[400px] h-64 px-2">
-                                        {yearlyStats.monthlyData.map((stat, idx) => (
-                                            <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full gap-2 group relative">
-                                                <div className="flex gap-1 items-end h-full w-full justify-center">
-                                                    {/* 수입 막대 */}
-                                                    <div 
-                                                        className="w-5 sm:w-8 bg-blue-600 rounded-t transition-all duration-700 relative group-hover:bg-blue-500 flex flex-col justify-end items-center overflow-hidden" 
-                                                        style={{ height: `${(stat.income / yearlyStats.maxVal) * 90}%`, minHeight: stat.income > 0 ? '20px' : '0' }}
-                                                    >
+                                    <div className="min-w-[500px] h-64 relative">
+                                        <svg width="100%" height="100%" viewBox="0 0 500 250" preserveAspectRatio="none">
+                                            {/* 꺾은선 (잔액) - 맨 뒤로 보내거나 맨 위로? 보통 위가 좋음. 순서대로 그리면 됨 */}
+                                            {/* 막대 그래프 */}
+                                            {yearlyStats.monthlyData.map((stat, i) => {
+                                                const barWidth = 12; 
+                                                const gap = 4;
+                                                // 500 width / 12 months = ~41.6px per month section
+                                                const xBase = (i / 11) * 460 + 10; // 약간 여유
+                                                
+                                                const hIncome = (stat.income / yearlyStats.maxVal) * 200;
+                                                const hExpense = (stat.expense / yearlyStats.maxVal) * 200;
+                                                
+                                                return (
+                                                    <g key={i}>
+                                                        {/* 수입 막대 (파랑) */}
                                                         {stat.income > 0 && (
-                                                            <span className="text-[9px] sm:text-[10px] text-white -rotate-90 whitespace-nowrap mb-4 sm:mb-6 font-medium drop-shadow-md">
-                                                                {formatCurrency(stat.income, currency).replace(/[₩¥CNY]/g, '').trim()}
-                                                            </span>
+                                                            <rect x={xBase - barWidth - gap/2} y={230 - hIncome} width={barWidth} height={hIncome} rx="2" fill="#3b82f6" />
                                                         )}
-                                                    </div>
-                                                    {/* 지출 막대 */}
-                                                    <div 
-                                                        className="w-5 sm:w-8 bg-rose-600 rounded-t transition-all duration-700 relative group-hover:bg-rose-500 flex flex-col justify-end items-center overflow-hidden" 
-                                                        style={{ height: `${(stat.expense / yearlyStats.maxVal) * 90}%`, minHeight: stat.expense > 0 ? '20px' : '0' }}
-                                                    >
+                                                        {/* 지출 막대 (빨강) */}
                                                         {stat.expense > 0 && (
-                                                            <span className="text-[9px] sm:text-[10px] text-white -rotate-90 whitespace-nowrap mb-4 sm:mb-6 font-medium drop-shadow-md">
-                                                                {formatCurrency(stat.expense, currency).replace(/[₩¥CNY]/g, '').trim()}
+                                                            <rect x={xBase + gap/2} y={230 - hExpense} width={barWidth} height={hExpense} rx="2" fill="#e11d48" />
+                                                        )}
+                                                    </g>
+                                                )
+                                            })}
+
+                                            {/* 꺾은선 그래프 (잔액) - 부드러운 곡선 */}
+                                            <path 
+                                                d={getSmoothPath(yearlyStats.monthlyData, yearlyStats.maxVal, 460, 230)} 
+                                                fill="none" 
+                                                stroke="#2dd4bf" 
+                                                strokeWidth="3" 
+                                                strokeLinecap="round" 
+                                                transform="translate(10, 0)" // x좌표 보정
+                                                style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}
+                                            />
+
+                                            {/* 꺾은선 포인트 및 텍스트 */}
+                                            {yearlyStats.monthlyData.map((stat, i) => {
+                                                const xBase = (i / 11) * 460 + 10;
+                                                const val = Math.max(0, stat.balance);
+                                                const y = 230 - (val / yearlyStats.maxVal) * 230;
+                                                
+                                                return (
+                                                    <circle key={i} cx={xBase} cy={y} r="3" fill="#2dd4bf" stroke="#fff" strokeWidth="1" />
+                                                );
+                                            })}
+                                        </svg>
+
+                                        {/* HTML 오버레이 텍스트 (SVG 안에 넣으면 스타일링 귀찮으므로 위에 덮음) */}
+                                        <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                                            {yearlyStats.monthlyData.map((stat, i) => {
+                                                const xPercent = (i / 11) * 92 + 2; // 대략적 위치
+                                                const hIncome = (stat.income / yearlyStats.maxVal) * 100;
+                                                const hExpense = (stat.expense / yearlyStats.maxVal) * 100;
+                                                
+                                                return (
+                                                    <div key={i} className="absolute h-full flex items-end justify-center" style={{ left: `${xPercent}%`, width: '40px', transform: 'translateX(-50%)', bottom: '20px' }}>
+                                                        {/* 수입 텍스트 */}
+                                                        {stat.income > 0 && (
+                                                            <span 
+                                                                className="absolute text-[9px] text-white font-bold drop-shadow-md whitespace-nowrap"
+                                                                style={{ bottom: `${hIncome/2.5 + 2}%`, left: '-4px' }} // 막대 중간쯤
+                                                            >
+                                                                {formatCompactNumber(stat.income)}
                                                             </span>
                                                         )}
+                                                        {/* 지출 텍스트 */}
+                                                        {stat.expense > 0 && (
+                                                            <span 
+                                                                className="absolute text-[9px] text-white font-bold drop-shadow-md whitespace-nowrap"
+                                                                style={{ bottom: `${hExpense/2.5 + 2}%`, left: '16px' }}
+                                                            >
+                                                                {formatCompactNumber(stat.expense)}
+                                                            </span>
+                                                        )}
+                                                        {/* 월 라벨 */}
+                                                        <span className="absolute -bottom-6 text-[10px] text-gray-500">{stat.month}월</span>
                                                     </div>
-                                                </div>
-                                                <span className={`text-xs font-bold ${month === idx ? theme.cardText : theme.subText}`}>{stat.month}월</span>
-                                            </div>
-                                        ))}
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* 2. 항목별 연간 흐름 테이블 (가로 스크롤) */}
                                 <div className="mt-8">
                                     <h4 className={`text-sm font-bold mb-4 ${theme.cardText}`}>항목별 상세 흐름</h4>
                                     <div className="overflow-x-auto border border-neutral-800 rounded-lg">
