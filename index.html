@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK 재무 캘린더 Pro</title>
+    <title>BK v1.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -28,6 +28,9 @@
         import React, { useState, useMemo, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
         import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers } from 'lucide-react';
+
+        // --- 버전 관리 상수 ---
+        const APP_VERSION = "v1.1";
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
@@ -79,7 +82,7 @@
             });
 
             useEffect(() => {
-                const savedData = localStorage.getItem('bk_budget_data_v4');
+                const savedData = localStorage.getItem('bk_budget_data_v5'); // 기존 v5 데이터 호환
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
@@ -96,7 +99,8 @@
             useEffect(() => {
                 if (isLoaded) {
                     const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories };
-                    localStorage.setItem('bk_budget_data_v4', JSON.stringify(dataToSave));
+                    // 버전업에 따라 키값 변경 가능하나 호환성을 위해 v5 유지 또는 v6로 마이그레이션 가능
+                    localStorage.setItem('bk_budget_data_v5', JSON.stringify(dataToSave)); 
                 }
             }, [initialBalance, currency, isDarkMode, transactions, categories, isLoaded]);
 
@@ -110,12 +114,12 @@
             }, [newTrans.type, categories, isModalOpen, editingId]);
 
             const handleExport = () => {
-                const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, exportDate: new Date().toISOString() };
+                const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, exportDate: new Date().toISOString(), version: APP_VERSION };
                 const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                a.download = `BK_Budget_Pro_${new Date().toISOString().slice(0, 10)}.json`;
+                a.download = `BK_Budget_${APP_VERSION}_${new Date().toISOString().slice(0, 10)}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
             };
@@ -171,9 +175,18 @@
             }, [transactions, initialBalance]);
 
             const categoryStats = useMemo(() => {
+                // 1. 이번 달 기준
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                 const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
                 
+                // 2. 지난 달 기준 계산 (비교용)
+                const prevDate = new Date(year, month - 1, 1);
+                const prevYear = prevDate.getFullYear();
+                const prevMonth = prevDate.getMonth();
+                const prevStartStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+                const prevEndStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-31`;
+
+                // 3. 전월 이월 계산
                 let carryover = Number(initialBalance);
                 transactions.forEach(t => {
                     if (t.date < startStr) {
@@ -182,25 +195,47 @@
                     }
                 });
 
+                // 4. 데이터 집계
                 const currentMonthTrans = transactions.filter(t => t.date >= startStr && t.date <= endStr);
+                const prevMonthTrans = transactions.filter(t => t.date >= prevStartStr && t.date <= prevEndStr);
+
                 const incomeMap = {};
                 const expenseMap = {};
+                const prevIncomeMap = {};
+                const prevExpenseMap = {};
+
+                // 이번 달 집계
                 currentMonthTrans.forEach(t => {
                     const targetMap = t.type === 'income' ? incomeMap : expenseMap;
                     const cat = t.category || '미분류';
                     targetMap[cat] = (targetMap[cat] || 0) + Number(t.amount);
                 });
+
+                // 저번 달 집계
+                prevMonthTrans.forEach(t => {
+                    const targetMap = t.type === 'income' ? prevIncomeMap : prevExpenseMap;
+                    const cat = t.category || '미분류';
+                    targetMap[cat] = (targetMap[cat] || 0) + Number(t.amount);
+                });
+
                 const sortStats = (map) => Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-                const totalIncome = Object.values(incomeMap).reduce((a, b) => a + b, 0);
-                const totalExpense = Object.values(expenseMap).reduce((a, b) => a + b, 0);
                 
+                const monthlyIncome = Object.values(incomeMap).reduce((a, b) => a + b, 0);
+                const monthlyExpense = Object.values(expenseMap).reduce((a, b) => a + b, 0);
+                
+                const totalRevenue = carryover + monthlyIncome;
+                const finalBalance = totalRevenue - monthlyExpense;
+
                 return {
                     income: sortStats(incomeMap),
                     expense: sortStats(expenseMap),
-                    totalIncome,
-                    totalExpense,
-                    monthBalance: totalIncome - totalExpense,
-                    carryover 
+                    prevIncomeMap,
+                    prevExpenseMap,
+                    monthlyIncome,
+                    monthlyExpense,
+                    carryover,
+                    totalRevenue, 
+                    finalBalance 
                 };
             }, [transactions, year, month, initialBalance]);
 
@@ -289,11 +324,35 @@
 
             if (!isLoaded) return null; 
 
+            // 전월 대비 증감 렌더링 헬퍼
+            const renderComparison = (currentVal, category, type) => {
+                const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
+                const prevVal = prevMap[category] || 0;
+                const diff = currentVal - prevVal;
+                
+                let diffText = <span className="text-gray-500">-</span>;
+                if (diff > 0) diffText = <span className="text-rose-500">▲{formatCurrency(diff, currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
+                if (diff < 0) diffText = <span className="text-blue-500">▼{formatCurrency(Math.abs(diff), currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
+
+                return (
+                    <div className="flex items-center gap-2 text-[10px] sm:text-xs">
+                        <span className="text-gray-400">전월 {formatCurrency(prevVal, currency).replace(/[₩¥CNY]/g, '').trim()}</span>
+                        {diffText}
+                    </div>
+                );
+            };
+
             return (
                 <div className={`min-h-screen font-sans transition-colors duration-200 ${theme.bg} ${theme.text}`}>
                     <header className={`sticky top-0 z-10 border-b ${theme.header}`}>
                         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-2"><div className="bg-blue-600 p-2 rounded-lg text-white"><CalendarIcon size={20} /></div><h1 className={`text-xl font-bold tracking-tight ${theme.cardText}`}>BK 재무</h1></div>
+                            <div className="flex items-center gap-2">
+                                <div className="bg-blue-600 p-2 rounded-lg text-white"><CalendarIcon size={20} /></div>
+                                <div className="flex items-end gap-1">
+                                    <h1 className={`text-xl font-bold tracking-tight ${theme.cardText}`}>BK</h1>
+                                    <span className={`text-xs font-mono mb-1 ${theme.subText}`}>{APP_VERSION}</span>
+                                </div>
+                            </div>
                             <div className="flex items-center gap-2">
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Sun size={20} /></button>
                                 <button onClick={() => { setIsSettingsOpen(true); setSettingsTab('general'); }} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Settings size={20} /></button>
@@ -316,25 +375,34 @@
                                     </div>
                                     <span className="text-xs font-medium px-2 py-1 rounded bg-neutral-800 text-gray-400">월간 현황</span>
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center divide-x divide-neutral-800/0 sm:divide-x sm:divide-neutral-800">
-                                    <div className="mb-2 sm:mb-0">
+                                
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-y-4 gap-x-2 text-center sm:divide-x sm:divide-neutral-800">
+                                    <div>
                                         <p className={`text-xs ${theme.subText} mb-1`}>전월 이월</p>
                                         <p className={`font-bold text-sm sm:text-base ${theme.cardText}`}>{formatCurrency(categoryStats.carryover, currency)}</p>
                                     </div>
-                                    <div className="mb-2 sm:mb-0">
+                                    <div>
                                         <p className={`text-xs ${theme.subText} mb-1`}>수입</p>
-                                        <p className={`font-bold text-sm sm:text-base ${theme.incomeText}`}>{formatCurrency(categoryStats.totalIncome, currency)}</p>
+                                        <p className={`font-bold text-sm sm:text-base ${theme.incomeText}`}>{formatCurrency(categoryStats.monthlyIncome, currency)}</p>
+                                    </div>
+                                    <div className="hidden sm:block">
+                                        <p className={`text-xs ${theme.subText} mb-1`}>총수입(가용)</p>
+                                        <p className={`font-bold text-sm sm:text-base ${theme.cardText}`}>{formatCurrency(categoryStats.totalRevenue, currency)}</p>
                                     </div>
                                     <div>
                                         <p className={`text-xs ${theme.subText} mb-1`}>지출</p>
-                                        <p className={`font-bold text-sm sm:text-base ${theme.expenseText}`}>{formatCurrency(categoryStats.totalExpense, currency)}</p>
+                                        <p className={`font-bold text-sm sm:text-base ${theme.expenseText}`}>{formatCurrency(categoryStats.monthlyExpense, currency)}</p>
                                     </div>
-                                    <div>
-                                        <p className={`text-xs ${theme.subText} mb-1`}>월 수지</p>
-                                        <p className={`font-bold text-sm sm:text-base ${categoryStats.monthBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
-                                            {formatCurrency(categoryStats.monthBalance, currency)}
+                                    <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 pt-2 sm:pt-0 border-neutral-800">
+                                        <p className={`text-xs ${theme.subText} mb-1`}>잔액</p>
+                                        <p className={`font-bold text-sm sm:text-base ${categoryStats.finalBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
+                                            {formatCurrency(categoryStats.finalBalance, currency)}
                                         </p>
                                     </div>
+                                </div>
+                                <div className="sm:hidden mt-2 pt-2 border-t border-neutral-800 flex justify-between text-xs px-2">
+                                    <span className={theme.subText}>가용 총수입 (이월+수입)</span>
+                                    <span className={theme.cardText}>{formatCurrency(categoryStats.totalRevenue, currency)}</span>
                                 </div>
                             </div>
 
@@ -437,40 +505,44 @@
                                             <Scale size={18} className="text-gray-400"/>
                                             월간 수지 (잔액)
                                         </h3>
-                                        <span className={`text-lg font-bold ${categoryStats.monthBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
-                                            {formatCurrency(categoryStats.monthBalance, currency)}
+                                        <span className={`text-lg font-bold ${categoryStats.finalBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
+                                            {formatCurrency(categoryStats.finalBalance, currency)}
                                         </span>
                                     </div>
                                     <div className="relative h-4 bg-neutral-800 rounded-full overflow-hidden mb-2">
                                         <div 
                                             className="absolute left-0 top-0 h-full bg-blue-500" 
-                                            style={{ width: `${categoryStats.totalIncome > 0 ? (categoryStats.totalIncome / (categoryStats.totalIncome + categoryStats.totalExpense)) * 100 : 0}%` }}
+                                            style={{ width: `${categoryStats.totalRevenue > 0 ? (categoryStats.totalRevenue / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}
                                         ></div>
                                         <div 
                                             className="absolute right-0 top-0 h-full bg-rose-500" 
-                                            style={{ width: `${categoryStats.totalExpense > 0 ? (categoryStats.totalExpense / (categoryStats.totalIncome + categoryStats.totalExpense)) * 100 : 0}%` }}
+                                            style={{ width: `${categoryStats.monthlyExpense > 0 ? (categoryStats.monthlyExpense / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}
                                         ></div>
                                     </div>
                                     <div className="flex justify-between text-xs">
-                                        <span className="text-blue-500">수입 {formatCurrency(categoryStats.totalIncome, currency)}</span>
-                                        <span className="text-rose-500">지출 {formatCurrency(categoryStats.totalExpense, currency)}</span>
+                                        <span className="text-blue-500">가용(총수입) {formatCurrency(categoryStats.totalRevenue, currency)}</span>
+                                        <span className="text-rose-500">지출 {formatCurrency(categoryStats.monthlyExpense, currency)}</span>
                                     </div>
                                 </div>
 
-                                {/* [수정] 좌우 배치를 위한 그리드 컨테이너 추가 */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* 지출 통계 (좌측) */}
                                     <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
                                         <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingDown size={18} className="text-rose-500"/>지출 분석</h3>
                                         <div className="space-y-3">
                                             {categoryStats.expense.map((item, idx) => (
                                                 <div key={item.name}>
-                                                    <div className="flex justify-between text-xs mb-1">
+                                                    <div className="flex justify-between items-end text-xs mb-1">
                                                         <span className={theme.cardText}>{item.name}</span>
-                                                        <span className={theme.expenseText}>{formatCurrency(item.value, currency)} ({categoryStats.totalExpense > 0 ? Math.round(item.value / categoryStats.totalExpense * 100) : 0}%)</span>
+                                                        <div className="flex gap-2 items-end">
+                                                            {/* [수정] 전월 대비 비교 데이터 표시 */}
+                                                            {renderComparison(item.value, item.name, 'expense')}
+                                                            <span className={`${theme.expenseText} font-bold text-sm`}>
+                                                                {formatCurrency(item.value, currency)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                     <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
-                                                        <div className="bg-rose-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalExpense > 0 ? (item.value / categoryStats.totalExpense) * 100 : 0}%` }}></div>
+                                                        <div className="bg-rose-500 h-2.5 rounded-full" style={{ width: `${categoryStats.monthlyExpense > 0 ? (item.value / categoryStats.monthlyExpense) * 100 : 0}%` }}></div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -478,18 +550,23 @@
                                         </div>
                                     </div>
 
-                                    {/* 수입 통계 (우측) */}
                                     <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
                                         <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingUp size={18} className="text-blue-500"/>수입 분석</h3>
                                         <div className="space-y-3">
                                             {categoryStats.income.map((item, idx) => (
                                                 <div key={item.name}>
-                                                    <div className="flex justify-between text-xs mb-1">
+                                                    <div className="flex justify-between items-end text-xs mb-1">
                                                         <span className={theme.cardText}>{item.name}</span>
-                                                        <span className={theme.incomeText}>{formatCurrency(item.value, currency)} ({categoryStats.totalIncome > 0 ? Math.round(item.value / categoryStats.totalIncome * 100) : 0}%)</span>
+                                                        <div className="flex gap-2 items-end">
+                                                            {/* [수정] 전월 대비 비교 데이터 표시 */}
+                                                            {renderComparison(item.value, item.name, 'income')}
+                                                            <span className={`${theme.incomeText} font-bold text-sm`}>
+                                                                {formatCurrency(item.value, currency)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                     <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
-                                                        <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalIncome > 0 ? (item.value / categoryStats.totalIncome) * 100 : 0}%` }}></div>
+                                                        <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${categoryStats.monthlyIncome > 0 ? (item.value / categoryStats.monthlyIncome) * 100 : 0}%` }}></div>
                                                     </div>
                                                 </div>
                                             ))}
