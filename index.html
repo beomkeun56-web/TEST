@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v1.1</title>
+    <title>BK v1.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -30,7 +30,7 @@
         import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers } from 'lucide-react';
 
         // --- 버전 관리 상수 ---
-        const APP_VERSION = "v1.1";
+        const APP_VERSION = "v1.2";
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
@@ -82,7 +82,7 @@
             });
 
             useEffect(() => {
-                const savedData = localStorage.getItem('bk_budget_data_v5'); // 기존 v5 데이터 호환
+                const savedData = localStorage.getItem('bk_budget_data_v5');
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
@@ -99,7 +99,6 @@
             useEffect(() => {
                 if (isLoaded) {
                     const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories };
-                    // 버전업에 따라 키값 변경 가능하나 호환성을 위해 v5 유지 또는 v6로 마이그레이션 가능
                     localStorage.setItem('bk_budget_data_v5', JSON.stringify(dataToSave)); 
                 }
             }, [initialBalance, currency, isDarkMode, transactions, categories, isLoaded]);
@@ -175,18 +174,15 @@
             }, [transactions, initialBalance]);
 
             const categoryStats = useMemo(() => {
-                // 1. 이번 달 기준
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                 const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
                 
-                // 2. 지난 달 기준 계산 (비교용)
                 const prevDate = new Date(year, month - 1, 1);
                 const prevYear = prevDate.getFullYear();
                 const prevMonth = prevDate.getMonth();
                 const prevStartStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
                 const prevEndStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-31`;
 
-                // 3. 전월 이월 계산
                 let carryover = Number(initialBalance);
                 transactions.forEach(t => {
                     if (t.date < startStr) {
@@ -195,7 +191,6 @@
                     }
                 });
 
-                // 4. 데이터 집계
                 const currentMonthTrans = transactions.filter(t => t.date >= startStr && t.date <= endStr);
                 const prevMonthTrans = transactions.filter(t => t.date >= prevStartStr && t.date <= prevEndStr);
 
@@ -204,14 +199,12 @@
                 const prevIncomeMap = {};
                 const prevExpenseMap = {};
 
-                // 이번 달 집계
                 currentMonthTrans.forEach(t => {
                     const targetMap = t.type === 'income' ? incomeMap : expenseMap;
                     const cat = t.category || '미분류';
                     targetMap[cat] = (targetMap[cat] || 0) + Number(t.amount);
                 });
 
-                // 저번 달 집계
                 prevMonthTrans.forEach(t => {
                     const targetMap = t.type === 'income' ? prevIncomeMap : prevExpenseMap;
                     const cat = t.category || '미분류';
@@ -324,15 +317,23 @@
 
             if (!isLoaded) return null; 
 
-            // 전월 대비 증감 렌더링 헬퍼
+            // 전월 대비 증감 렌더링 (로직 수정됨)
             const renderComparison = (currentVal, category, type) => {
                 const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
                 const prevVal = prevMap[category] || 0;
                 const diff = currentVal - prevVal;
                 
                 let diffText = <span className="text-gray-500">-</span>;
-                if (diff > 0) diffText = <span className="text-rose-500">▲{formatCurrency(diff, currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
-                if (diff < 0) diffText = <span className="text-blue-500">▼{formatCurrency(Math.abs(diff), currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
+                
+                if (diff > 0) {
+                    // 증가: 수입이면 파랑(좋음), 지출이면 빨강(나쁨)
+                    const colorClass = type === 'income' ? 'text-blue-500' : 'text-rose-500';
+                    diffText = <span className={colorClass}>▲{formatCurrency(diff, currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
+                } else if (diff < 0) {
+                    // 감소: 수입이면 빨강(나쁨), 지출이면 파랑(좋음)
+                    const colorClass = type === 'income' ? 'text-rose-500' : 'text-blue-500';
+                    diffText = <span className={colorClass}>▼{formatCurrency(Math.abs(diff), currency).replace(/[₩¥CNY]/g, '').trim()}</span>;
+                }
 
                 return (
                     <div className="flex items-center gap-2 text-[10px] sm:text-xs">
@@ -386,7 +387,8 @@
                                         <p className={`font-bold text-sm sm:text-base ${theme.incomeText}`}>{formatCurrency(categoryStats.monthlyIncome, currency)}</p>
                                     </div>
                                     <div className="hidden sm:block">
-                                        <p className={`text-xs ${theme.subText} mb-1`}>총수입(가용)</p>
+                                        {/* [수정] 용어 수정: 총수입 */}
+                                        <p className={`text-xs ${theme.subText} mb-1`}>총수입</p>
                                         <p className={`font-bold text-sm sm:text-base ${theme.cardText}`}>{formatCurrency(categoryStats.totalRevenue, currency)}</p>
                                     </div>
                                     <div>
@@ -400,8 +402,9 @@
                                         </p>
                                     </div>
                                 </div>
+                                {/* [수정] 모바일 뷰 용어 수정: 총수입 */}
                                 <div className="sm:hidden mt-2 pt-2 border-t border-neutral-800 flex justify-between text-xs px-2">
-                                    <span className={theme.subText}>가용 총수입 (이월+수입)</span>
+                                    <span className={theme.subText}>총수입 (이월+수입)</span>
                                     <span className={theme.cardText}>{formatCurrency(categoryStats.totalRevenue, currency)}</span>
                                 </div>
                             </div>
@@ -534,7 +537,6 @@
                                                     <div className="flex justify-between items-end text-xs mb-1">
                                                         <span className={theme.cardText}>{item.name}</span>
                                                         <div className="flex gap-2 items-end">
-                                                            {/* [수정] 전월 대비 비교 데이터 표시 */}
                                                             {renderComparison(item.value, item.name, 'expense')}
                                                             <span className={`${theme.expenseText} font-bold text-sm`}>
                                                                 {formatCurrency(item.value, currency)}
@@ -558,7 +560,6 @@
                                                     <div className="flex justify-between items-end text-xs mb-1">
                                                         <span className={theme.cardText}>{item.name}</span>
                                                         <div className="flex gap-2 items-end">
-                                                            {/* [수정] 전월 대비 비교 데이터 표시 */}
                                                             {renderComparison(item.value, item.name, 'income')}
                                                             <span className={`${theme.incomeText} font-bold text-sm`}>
                                                                 {formatCurrency(item.value, currency)}
