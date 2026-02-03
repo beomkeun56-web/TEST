@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v1.9 (Reverted)</title>
+    <title>BK v2.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -21,15 +21,19 @@
         button { touch-action: manipulation; }
     </style>
 </head>
-<body class="bg-black text-gray-100 font-sans selection:bg-blue-500 selection:text-white">
+<body class="bg-black text-gray-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module" data-presets="react">
         import React, { useState, useMemo, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2 } from 'lucide-react';
+        import { ChevronLeft, ChevronRight, Plus, Minus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2, StickyNote, FolderTree, Tag } from 'lucide-react';
 
-        const APP_VERSION = "v1.9";
+        const APP_VERSION = "v2.1";
+
+        // 글자 크기 단계
+        const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl'];
+        const FONT_LABELS = ['80%', '90%', '100%', '110%', '120%'];
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
@@ -57,9 +61,16 @@
             return days;
         };
 
+        // 소항목 기본값
         const DEFAULT_CATEGORIES = {
             income: ['급여', '용돈', '상여금', '금융수입', '기타'],
             expense: ['식비', '교통', '문화', '공과금', '쇼핑', '주거', '의료', '기타']
+        };
+
+        // [신규] 대항목 기본값
+        const DEFAULT_MAIN_CATEGORIES = {
+            income: ['근로소득', '금융소득', '기타'],
+            expense: ['고정지출', '변동지출', '저축', '기타']
         };
 
         function App() {
@@ -67,29 +78,42 @@
             const [initialBalance, setInitialBalance] = useState(0);
             const [currency, setCurrency] = useState('KRW'); 
             const [isDarkMode, setIsDarkMode] = useState(true); 
+            const [fontIndex, setFontIndex] = useState(2); 
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [activeTab, setActiveTab] = useState('calendar');
             const [currentDate, setCurrentDate] = useState(new Date());
             const [transactions, setTransactions] = useState([]);
+            
+            // 카테고리 상태 (소항목, 대항목)
             const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+            const [mainCategories, setMainCategories] = useState(DEFAULT_MAIN_CATEGORIES);
+
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [selectedDateDetail, setSelectedDateDetail] = useState(null); 
-            const [settingsTab, setSettingsTab] = useState('general');
+            
+            // 설정 탭 상태
+            const [settingsTab, setSettingsTab] = useState('general'); // general, main_category, sub_category
+            
+            // 카테고리 추가용 상태
             const [newCategoryName, setNewCategoryName] = useState('');
             const [categoryTypeToAdd, setCategoryTypeToAdd] = useState('expense');
             
             const [newTrans, setNewTrans] = useState({
                 date: new Date().toISOString().split('T')[0],
                 type: 'expense',
+                mainCategory: '', 
                 category: '',
                 amount: '',
-                desc: ''
+                desc: '',
+                memo: '' 
             });
 
-            // 초기 로딩
+            // 초기 로딩 (데이터 + 폰트 설정)
             useEffect(() => {
-                const savedData = localStorage.getItem('bk_budget_data_v5');
+                const savedData = localStorage.getItem('bk_budget_data_v21');
+                const savedFontIndex = localStorage.getItem('bk_budget_font_idx');
+
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
@@ -98,31 +122,64 @@
                         if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode);
                         if (parsed.transactions) setTransactions(parsed.transactions);
                         if (parsed.categories) setCategories(parsed.categories);
+                        if (parsed.mainCategories) setMainCategories(parsed.mainCategories); // 대항목 로드
                     } catch (e) { console.error(e); }
+                } else {
+                    // 이전 버전 데이터 마이그레이션 시도 (v5 -> v2.1)
+                    const oldData = localStorage.getItem('bk_budget_data_v5');
+                    if (oldData) {
+                        try {
+                            const parsed = JSON.parse(oldData);
+                            if (parsed.transactions) setTransactions(parsed.transactions);
+                            if (parsed.initialBalance) setInitialBalance(parsed.initialBalance);
+                            if (parsed.categories) setCategories(parsed.categories);
+                        } catch(e) {}
+                    }
                 }
+                
+                if (savedFontIndex !== null) {
+                    setFontIndex(parseInt(savedFontIndex, 10));
+                }
+
                 setIsLoaded(true);
             }, []);
 
-            // 저장
+            // 데이터 저장
             useEffect(() => {
                 if (isLoaded) {
-                    const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories };
-                    localStorage.setItem('bk_budget_data_v5', JSON.stringify(dataToSave)); 
+                    const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, mainCategories };
+                    localStorage.setItem('bk_budget_data_v21', JSON.stringify(dataToSave)); 
                 }
-            }, [initialBalance, currency, isDarkMode, transactions, categories, isLoaded]);
+            }, [initialBalance, currency, isDarkMode, transactions, categories, mainCategories, isLoaded]);
 
-            // 기본값 설정
+            const handleFontUp = () => {
+                const newIndex = Math.min(fontIndex + 1, FONT_SIZES.length - 1);
+                setFontIndex(newIndex);
+                localStorage.setItem('bk_budget_font_idx', newIndex);
+            };
+
+            const handleFontDown = () => {
+                const newIndex = Math.max(fontIndex - 1, 0);
+                setFontIndex(newIndex);
+                localStorage.setItem('bk_budget_font_idx', newIndex);
+            };
+
+            // 기본값 설정 (대항목/소항목)
             useEffect(() => {
                 if (isModalOpen && !editingId) {
-                    const currentCats = newTrans.type === 'income' ? categories.income : categories.expense;
-                    if (currentCats.length > 0) {
-                        setNewTrans(prev => ({ ...prev, category: currentCats[0] }));
-                    }
+                    const currentMainCats = newTrans.type === 'income' ? mainCategories.income : mainCategories.expense;
+                    const currentSubCats = newTrans.type === 'income' ? categories.income : categories.expense;
+                    
+                    setNewTrans(prev => ({ 
+                        ...prev, 
+                        mainCategory: currentMainCats.length > 0 ? currentMainCats[0] : '',
+                        category: currentSubCats.length > 0 ? currentSubCats[0] : ''
+                    }));
                 }
-            }, [newTrans.type, categories, isModalOpen, editingId]);
+            }, [newTrans.type, categories, mainCategories, isModalOpen, editingId]);
 
             const handleExport = () => {
-                const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, exportDate: new Date().toISOString(), version: APP_VERSION };
+                const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, mainCategories, exportDate: new Date().toISOString(), version: APP_VERSION };
                 const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
@@ -145,6 +202,7 @@
                             if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode);
                             if (parsed.transactions) setTransactions(parsed.transactions);
                             if (parsed.categories) setCategories(parsed.categories);
+                            if (parsed.mainCategories) setMainCategories(parsed.mainCategories);
                             alert("복원 완료");
                             setIsSettingsOpen(false);
                         }
@@ -183,17 +241,22 @@
             }, [transactions, initialBalance]);
 
             const yearlyStats = useMemo(() => {
-                const monthlyData = Array(12).fill(null).map((_, i) => ({ month: i + 1, income: 0, expense: 0, balance: 0 }));
-                const categoryData = { income: {}, expense: {} };
+                const monthlyData = Array(12).fill(null).map((_, i) => ({ 
+                    month: i + 1, 
+                    income: 0, 
+                    expense: 0, 
+                    balance: 0,
+                    carryover: 0,
+                    totalRevenue: 0 
+                }));
                 
-                categories.income.forEach(cat => categoryData.income[cat] = Array(12).fill(0));
-                categories.expense.forEach(cat => categoryData.expense[cat] = Array(12).fill(0));
+                const categoryData = { income: {}, expense: {} };
 
                 const yearTransactions = transactions.filter(t => t.date.startsWith(String(year)));
                 
                 yearTransactions.forEach(t => {
                     const m = new Date(t.date).getMonth(); 
-                    const cat = t.category || '기타';
+                    const cat = t.mainCategory || t.category || '기타';
                     const amt = Number(t.amount);
 
                     if (t.type === 'income') {
@@ -207,16 +270,27 @@
                     }
                 });
 
+                let currentCarryover = Number(initialBalance);
+                const prevYearTrans = transactions.filter(t => new Date(t.date).getFullYear() < year);
+                prevYearTrans.forEach(t => {
+                    if(t.type === 'income') currentCarryover += Number(t.amount);
+                    else currentCarryover -= Number(t.amount);
+                });
+
                 monthlyData.forEach(s => {
-                    s.balance = s.income - s.expense;
+                    s.carryover = currentCarryover; 
+                    s.totalRevenue = s.carryover + s.income; 
+                    s.balance = s.totalRevenue - s.expense; 
+                    currentCarryover = s.balance;
                 });
 
                 return { monthlyData, categoryData }; 
-            }, [transactions, year, categories]);
+            }, [transactions, year, categories, initialBalance]);
 
             const categoryStats = useMemo(() => {
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                 const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+                
                 const prevDate = new Date(year, month - 1, 1);
                 const prevYear = prevDate.getFullYear();
                 const prevMonth = prevDate.getMonth();
@@ -241,13 +315,13 @@
 
                 currentMonthTrans.forEach(t => {
                     const targetMap = t.type === 'income' ? incomeMap : expenseMap;
-                    const cat = t.category || '미분류';
+                    const cat = t.mainCategory || t.category || '기타';
                     targetMap[cat] = (targetMap[cat] || 0) + Number(t.amount);
                 });
 
                 prevMonthTrans.forEach(t => {
                     const targetMap = t.type === 'income' ? prevIncomeMap : prevExpenseMap;
-                    const cat = t.category || '미분류';
+                    const cat = t.mainCategory || t.category || '기타';
                     targetMap[cat] = (targetMap[cat] || 0) + Number(t.amount);
                 });
 
@@ -286,20 +360,38 @@
             const handleSaveTransaction = (e) => {
                 e.preventDefault();
                 if (!newTrans.amount || !newTrans.desc) return;
-                const currentCats = newTrans.type === 'income' ? categories.income : categories.expense;
-                const categoryToSave = newTrans.category || currentCats[0] || '기타';
-                const transToSave = { ...newTrans, category: categoryToSave, amount: Number(newTrans.amount) };
+                
+                const currentMainCats = newTrans.type === 'income' ? mainCategories.income : mainCategories.expense;
+                const currentSubCats = newTrans.type === 'income' ? categories.income : categories.expense;
+
+                const transToSave = { 
+                    ...newTrans, 
+                    mainCategory: newTrans.mainCategory || (currentMainCats[0] || '기타'),
+                    category: newTrans.category || (currentSubCats[0] || '기타'),
+                    amount: Number(newTrans.amount) 
+                };
+
                 if (editingId) {
                     setTransactions(prev => prev.map(t => t.id === editingId ? { ...transToSave, id: editingId } : t));
                 } else {
                     setTransactions([...transactions, { id: Date.now(), ...transToSave }]);
                 }
-                setIsModalOpen(false); setEditingId(null); setNewTrans({ ...newTrans, amount: '', desc: '', category: '' }); setSelectedDateDetail(null);
+                setIsModalOpen(false); setEditingId(null); 
+                setNewTrans({ ...newTrans, amount: '', desc: '', category: '', mainCategory: '', memo: '' }); 
+                setSelectedDateDetail(null);
             };
 
             const handleEditClick = (transaction) => {
                 setEditingId(transaction.id);
-                setNewTrans({ date: transaction.date, type: transaction.type, amount: transaction.amount, desc: transaction.desc, category: transaction.category || '' });
+                setNewTrans({ 
+                    date: transaction.date, 
+                    type: transaction.type, 
+                    amount: transaction.amount, 
+                    desc: transaction.desc, 
+                    category: transaction.category || '',
+                    mainCategory: transaction.mainCategory || '',
+                    memo: transaction.memo || ''
+                });
                 setIsModalOpen(true);
                 setSelectedDateDetail(null);
             };
@@ -317,18 +409,26 @@
                 setSelectedDateDetail({ dateStr, items: dayTrans });
             };
 
-            const handleAddCategory = () => {
+            // 카테고리 관리 핸들러 (대항목/소항목 공용)
+            const handleAddCategory = (isMain) => {
                 if (!newCategoryName.trim()) return;
                 const type = categoryTypeToAdd;
-                if (categories[type].includes(newCategoryName)) { alert('이미 존재함'); return; }
-                setCategories(prev => ({ ...prev, [type]: [...prev[type], newCategoryName] }));
+                const targetState = isMain ? mainCategories : categories;
+                const setTargetState = isMain ? setMainCategories : setCategories;
+
+                if (targetState[type].includes(newCategoryName)) { alert('이미 존재함'); return; }
+                
+                setTargetState(prev => ({ ...prev, [type]: [...prev[type], newCategoryName] }));
                 setNewCategoryName('');
             };
 
-            const handleDeleteCategory = (type, name) => {
-                if (categories[type].length <= 1) { alert('최소 1개 필수'); return; }
+            const handleDeleteCategory = (isMain, type, name) => {
+                const targetState = isMain ? mainCategories : categories;
+                const setTargetState = isMain ? setMainCategories : setCategories;
+
+                if (targetState[type].length <= 1) { alert('최소 1개 필수'); return; }
                 if (window.confirm('삭제하시겠습니까?')) {
-                    setCategories(prev => ({ ...prev, [type]: prev[type].filter(c => c !== name) }));
+                    setTargetState(prev => ({ ...prev, [type]: prev[type].filter(c => c !== name) }));
                 }
             };
 
@@ -355,7 +455,6 @@
 
             if (!isLoaded) return null; 
 
-            // 전월 대비 증감 렌더링
             const renderComparison = (currentVal, category, type) => {
                 const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
                 const prevVal = prevMap[category] || 0;
@@ -376,9 +475,36 @@
                 );
             };
 
+            const currentFontSizeClass = FONT_SIZES[fontIndex];
+
+            // 카테고리 관리 탭 렌더링 헬퍼
+            const renderCategoryManager = (isMain) => {
+                const targetState = isMain ? mainCategories : categories;
+                return (
+                    <div className="space-y-4">
+                        <div className="flex gap-2 p-1 bg-neutral-800 rounded mb-2">
+                            <button onClick={() => setCategoryTypeToAdd('income')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'income' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>수입 {isMain ? '대항목' : '소항목'}</button>
+                            <button onClick={() => setCategoryTypeToAdd('expense')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'expense' ? 'bg-rose-600 text-white' : 'text-gray-400'}`}>지출 {isMain ? '대항목' : '소항목'}</button>
+                        </div>
+                        <div className="flex gap-2">
+                            <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 항목 이름" className={`flex-1 rounded border px-3 py-2 text-sm ${theme.input}`} />
+                            <button onClick={() => handleAddCategory(isMain)} className="bg-blue-600 text-white px-3 py-2 rounded text-sm shrink-0">추가</button>
+                        </div>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                            {targetState[categoryTypeToAdd].map(cat => (
+                                <div key={cat} className={`flex justify-between items-center p-2 rounded border ${theme.border} ${theme.bg}`}>
+                                    <span className={`text-sm ${theme.cardText}`}>{cat}</span>
+                                    <button onClick={() => handleDeleteCategory(isMain, categoryTypeToAdd, cat)} className="text-gray-500 hover:text-red-500"><Trash2 size={14} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
             return (
-                <div className={`min-h-screen font-sans transition-colors duration-200 ${theme.bg} ${theme.text}`}>
-                    <header className={`sticky top-0 z-10 border-b ${theme.header}`}>
+                <div className={`min-h-screen font-sans transition-colors duration-200 ${theme.bg} ${theme.text} overflow-x-hidden ${currentFontSizeClass} text-transition`}>
+                    <header className={`sticky top-0 z-50 border-b ${theme.header}`}>
                         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="bg-blue-600 p-2 rounded-lg text-white"><CalendarIcon size={20} /></div>
@@ -388,6 +514,11 @@
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
+                                <div className="flex items-center bg-neutral-800 rounded-lg p-0.5 mr-2">
+                                    <button onClick={handleFontDown} className="p-1.5 text-gray-400 hover:text-white"><Minus size={14}/></button>
+                                    <span className="text-[10px] w-8 text-center text-gray-300 font-mono">{FONT_LABELS[fontIndex]}</span>
+                                    <button onClick={handleFontUp} className="p-1.5 text-gray-400 hover:text-white"><Plus size={14}/></button>
+                                </div>
                                 <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Sun size={20} /></button>
                                 <button onClick={() => { setIsSettingsOpen(true); setSettingsTab('general'); }} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Settings size={20} /></button>
                                 <button onClick={() => { setEditingId(null); setIsModalOpen(true); }} className="ml-2 bg-blue-600 text-white px-3 py-2 rounded-md"><Plus size={16} /></button>
@@ -485,6 +616,8 @@
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded border ${t.type === 'income' ? 'border-blue-500 text-blue-500' : 'border-rose-500 text-rose-500'}`}>{t.category}</span>
                                                     <p className={`font-medium ${theme.cardText}`}>{t.desc}</p>
                                                 </div>
+                                                {/* 메모 표시 */}
+                                                {t.memo && <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1"><StickyNote size={10}/> {t.memo}</p>}
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <span className={`font-bold ${t.type === 'income' ? theme.incomeText : theme.expenseText}`}>{t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, currency)}</span>
@@ -597,8 +730,16 @@
                                             </tr>
                                         </thead>
                                         <tbody className={`divide-y divide-neutral-800 ${theme.cardText}`}>
+                                            <tr className="bg-neutral-800/80 font-bold">
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-gray-400">전월 이월</td>
+                                                {yearlyStats.monthlyData.map((stat, i) => (
+                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-gray-400">{formatCompactNumber(stat.carryover)}</td>
+                                                ))}
+                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-gray-400">-</td>
+                                            </tr>
+
                                             <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-blue-400">월 수입 총액</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-blue-400">월 수입</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
                                                     <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-blue-400">{formatCompactNumber(stat.income)}</td>
                                                 ))}
@@ -607,7 +748,7 @@
                                                 </td>
                                             </tr>
                                             <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-rose-400">월 지출 총액</td>
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-rose-400">월 지출</td>
                                                 {yearlyStats.monthlyData.map((stat, i) => (
                                                     <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-rose-400">{formatCompactNumber(stat.expense)}</td>
                                                 ))}
@@ -627,7 +768,7 @@
                                                 </td>
                                             </tr>
 
-                                            <tr className="bg-blue-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-blue-400">수입 항목 상세</td></tr>
+                                            <tr className="bg-blue-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-blue-400">수입 상세 (대항목)</td></tr>
                                             {Object.entries(yearlyStats.categoryData.income).map(([cat, months]) => {
                                                 const total = months.reduce((a, b) => a + b, 0);
                                                 if (total === 0) return null;
@@ -644,7 +785,7 @@
                                                 );
                                             })}
 
-                                            <tr className="bg-rose-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-rose-400">지출 항목 상세</td></tr>
+                                            <tr className="bg-rose-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-rose-400">지출 상세 (대항목)</td></tr>
                                             {Object.entries(yearlyStats.categoryData.expense).map(([cat, months]) => {
                                                 const total = months.reduce((a, b) => a + b, 0);
                                                 if (total === 0) return null;
@@ -697,7 +838,8 @@
                                 <div className={`px-4 py-3 border-b flex justify-between items-center ${theme.border}`}><h3 className={`font-bold ${theme.cardText}`}>설정</h3><button onClick={() => setIsSettingsOpen(false)} className={theme.subText}><X size={20} /></button></div>
                                 <div className={`flex border-b ${theme.border}`}>
                                     <button onClick={() => setSettingsTab('general')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'general' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>기본 설정</button>
-                                    <button onClick={() => setSettingsTab('category')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'category' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>항목 관리</button>
+                                    <button onClick={() => setSettingsTab('main_category')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'main_category' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>대항목 관리</button>
+                                    <button onClick={() => setSettingsTab('sub_category')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'sub_category' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>소항목 관리</button>
                                 </div>
                                 <div className="p-4 space-y-4 overflow-y-auto">
                                     {settingsTab === 'general' ? (
@@ -713,24 +855,7 @@
                                             <div><label className={`text-xs block mb-1 ${theme.subText}`}>통화</label><div className="flex gap-2"><button onClick={() => setCurrency('KRW')} className={`flex-1 py-2 text-sm border rounded ${currency === 'KRW' ? 'bg-blue-600 text-white' : theme.input}`}>원 (₩)</button><button onClick={() => setCurrency('CNY')} className={`flex-1 py-2 text-sm border rounded ${currency === 'CNY' ? 'bg-blue-600 text-white' : theme.input}`}>위안 (¥)</button></div></div>
                                         </>
                                     ) : (
-                                        <div className="space-y-4">
-                                            <div className="flex gap-2 p-1 bg-neutral-800 rounded mb-2">
-                                                <button onClick={() => setCategoryTypeToAdd('income')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'income' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>수입 항목</button>
-                                                <button onClick={() => setCategoryTypeToAdd('expense')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'expense' ? 'bg-rose-600 text-white' : 'text-gray-400'}`}>지출 항목</button>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 항목 이름" className={`flex-1 rounded border px-3 py-2 text-sm ${theme.input}`} />
-                                                <button onClick={handleAddCategory} className="bg-blue-600 text-white px-3 py-2 rounded text-sm shrink-0">추가</button>
-                                            </div>
-                                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
-                                                {categories[categoryTypeToAdd].map(cat => (
-                                                    <div key={cat} className={`flex justify-between items-center p-2 rounded border ${theme.border} ${theme.bg}`}>
-                                                        <span className={`text-sm ${theme.cardText}`}>{cat}</span>
-                                                        <button onClick={() => handleDeleteCategory(categoryTypeToAdd, cat)} className="text-gray-500 hover:text-red-500"><Trash2 size={14} /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        renderCategoryManager(settingsTab === 'main_category')
                                     )}
                                 </div>
                                 <div className={`p-4 border-t ${theme.border}`}><button onClick={() => setIsSettingsOpen(false)} className="w-full bg-blue-600 text-white py-2 rounded">닫기</button></div>
@@ -747,16 +872,29 @@
                                         <div className="flex-1"><label className={`text-xs block mb-1 ${theme.subText}`}>날짜</label><input type="date" required value={newTrans.date} onChange={(e) => setNewTrans({ ...newTrans, date: e.target.value })} className={`w-full rounded border px-2 py-2 text-sm ${theme.input}`} /></div>
                                         <div className="flex-1"><label className={`text-xs block mb-1 ${theme.subText}`}>유형</label><div className="flex gap-1"><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'income' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'income' ? 'bg-blue-600 text-white' : theme.input}`}>수입</button><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'expense' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'expense' ? 'bg-rose-600 text-white' : theme.input}`}>지출</button></div></div>
                                     </div>
-                                    <div>
-                                        <label className={`text-xs block mb-1 ${theme.subText}`}>항목(카테고리)</label>
-                                        <select value={newTrans.category} onChange={(e) => setNewTrans({ ...newTrans, category: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
-                                            {(newTrans.type === 'income' ? categories.income : categories.expense).map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
+                                    <div className="flex gap-2">
+                                        {/* 대항목 선택 */}
+                                        <div className="flex-1">
+                                            <label className={`text-xs block mb-1 ${theme.subText}`}>대항목</label>
+                                            <select value={newTrans.mainCategory} onChange={(e) => setNewTrans({ ...newTrans, mainCategory: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
+                                                {(newTrans.type === 'income' ? mainCategories.income : mainCategories.expense).map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        {/* 소항목 선택 */}
+                                        <div className="flex-1">
+                                            <label className={`text-xs block mb-1 ${theme.subText}`}>소항목</label>
+                                            <select value={newTrans.category} onChange={(e) => setNewTrans({ ...newTrans, category: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
+                                                {(newTrans.type === 'income' ? categories.income : categories.expense).map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                     <div><label className={`text-xs block mb-1 ${theme.subText}`}>금액</label><input type="number" required min="0" placeholder="0" value={newTrans.amount} onChange={(e) => setNewTrans({ ...newTrans, amount: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
                                     <div><label className={`text-xs block mb-1 ${theme.subText}`}>내용</label><input type="text" required placeholder="내용 입력" value={newTrans.desc} onChange={(e) => setNewTrans({ ...newTrans, desc: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
+                                    <div><label className={`text-xs block mb-1 ${theme.subText}`}>메모</label><input type="text" placeholder="메모 (목록에만 표시됨)" value={newTrans.memo} onChange={(e) => setNewTrans({ ...newTrans, memo: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
                                     <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded mt-2">{editingId ? '수정 완료' : '저장'}</button>
                                 </form>
                             </div>
