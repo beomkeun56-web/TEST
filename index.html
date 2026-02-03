@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v1.8</title>
+    <title>BK v1.9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -19,10 +19,6 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         button { touch-action: manipulation; }
-        /* 그래프 애니메이션 */
-        .chart-bar { transition: height 0.5s ease-out; }
-        .chart-line { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: draw 1s forwards ease-out; }
-        @keyframes draw { to { stroke-dashoffset: 0; } }
     </style>
 </head>
 <body class="bg-black text-gray-100 font-sans selection:bg-blue-500 selection:text-white">
@@ -31,9 +27,9 @@
     <script type="text/babel" data-type="module" data-presets="react">
         import React, { useState, useMemo, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart } from 'lucide-react';
+        import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2 } from 'lucide-react';
 
-        const APP_VERSION = "v1.8";
+        const APP_VERSION = "v1.9";
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
@@ -41,10 +37,9 @@
         };
 
         const formatCompactNumber = (number) => {
-            if (number === 0) return '';
+            if (number === 0) return '-';
             if (Math.abs(number) < 10000) return new Intl.NumberFormat('ko-KR').format(number);
             const val = number / 10000;
-            // 10만, 5.7만 등 소수점 정리
             return val.toFixed(val % 1 === 0 ? 0 : 1) + '만';
         };
 
@@ -212,66 +207,12 @@
                     }
                 });
 
-                let maxVal = 0;
                 monthlyData.forEach(s => {
                     s.balance = s.income - s.expense;
-                    if (s.income > maxVal) maxVal = s.income;
-                    if (s.expense > maxVal) maxVal = s.expense;
-                    if (Math.abs(s.balance) > maxVal) maxVal = Math.abs(s.balance);
                 });
 
-                maxVal = maxVal * 1.2 || 1; 
-
-                return { monthlyData, categoryData, maxVal }; 
+                return { monthlyData, categoryData }; 
             }, [transactions, year, categories]);
-
-            // 곡선 생성 함수 (0~100 좌표계 사용)
-            const getSmoothPath = (data, maxVal) => {
-                if (data.length === 0) return "";
-                const points = data.map((d, i) => {
-                    // X: 12개월을 0~100으로 분할 (각 월의 중앙)
-                    const x = (i * (100 / 12)) + (100 / 24); 
-                    const val = Math.max(0, d.balance);
-                    // Y: 0~100 (100이 바닥)
-                    const y = 100 - (val / maxVal) * 90; // 90% 높이만 사용 (여백)
-                    return [x, y];
-                });
-
-                if (points.length === 1) return `M ${points[0][0]},${points[0][1]}`;
-
-                const line = (pointA, pointB) => {
-                    const lengthX = pointB[0] - pointA[0];
-                    const lengthY = pointB[1] - pointA[1];
-                    return {
-                        length: Math.sqrt(Math.pow(lengthX, 2) + Math.pow(lengthY, 2)),
-                        angle: Math.atan2(lengthY, lengthX)
-                    };
-                };
-
-                const controlPoint = (current, previous, next, reverse) => {
-                    const p = previous || current;
-                    const n = next || current;
-                    const o = line(p, n);
-                    const angle = o.angle + (reverse ? Math.PI : 0);
-                    const length = o.length * 0.2;
-                    const x = current[0] + Math.cos(angle) * length;
-                    const y = current[1] + Math.sin(angle) * length;
-                    return [x, y];
-                };
-
-                const bezierCommand = (point, i, a) => {
-                    const cps = controlPoint(a[i - 1], a[i - 2], point);
-                    const cpe = controlPoint(point, a[i - 1], a[i + 1], true);
-                    return `C ${cps[0]},${cps[1]} ${cpe[0]},${cpe[1]} ${point[0]},${point[1]}`;
-                };
-
-                const d = points.reduce((acc, point, i, a) => i === 0
-                    ? `M ${point[0]},${point[1]}`
-                    : `${acc} ${bezierCommand(point, i, a)}`
-                , "");
-                
-                return d;
-            };
 
             const categoryStats = useMemo(() => {
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
@@ -414,6 +355,7 @@
 
             if (!isLoaded) return null; 
 
+            // 전월 대비 증감 렌더링
             const renderComparison = (currentVal, category, type) => {
                 const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
                 const prevVal = prevMap[category] || 0;
@@ -485,13 +427,15 @@
                             </div>
                         </div>
 
+                        {/* 탭 메뉴 */}
                         <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-800">
                             <button onClick={() => setActiveTab('calendar')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'calendar' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><LayoutGrid size={18} />달력</button>
                             <button onClick={() => setActiveTab('list')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'list' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><List size={18} />목록</button>
                             <button onClick={() => setActiveTab('stats')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'stats' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><BarChart3 size={18} />통계</button>
-                            <button onClick={() => setActiveTab('yearly')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'yearly' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><LineChart size={18} />연간</button>
+                            <button onClick={() => setActiveTab('yearly')} className={`pb-3 px-4 text-sm font-medium flex items-center gap-2 border-b-2 ${activeTab === 'yearly' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><Table2 size={18} />연간</button>
                         </div>
 
+                        {/* 캘린더 뷰 */}
                         {activeTab === 'calendar' && (
                             <div className={`rounded-xl shadow border overflow-hidden ${theme.card}`}>
                                 <div className={`grid grid-cols-7 border-b ${theme.border} ${theme.th}`}>
@@ -529,6 +473,7 @@
                             </div>
                         )}
 
+                        {/* 리스트 뷰 */}
                         {activeTab === 'list' && (
                             <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
                                 <div className="space-y-3">
@@ -552,6 +497,7 @@
                             </div>
                         )}
 
+                        {/* 통계 뷰 */}
                         {activeTab === 'stats' && (
                             <div className="space-y-6 animate-in fade-in zoom-in duration-200">
                                 <div className={`rounded-xl shadow border p-5 ${theme.card}`}>
@@ -630,139 +576,94 @@
                             </div>
                         )}
 
+                        {/* 연간 뷰 (그래프 제거, 표 강조) */}
                         {activeTab === 'yearly' && (
                             <div className={`rounded-xl shadow border p-5 animate-in fade-in zoom-in duration-200 ${theme.card}`}>
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className={`font-bold flex items-center gap-2 ${theme.cardText}`}>
-                                        <BarChart3 size={18} className="text-gray-400"/>
-                                        {year}년 연간 흐름
+                                        <Table2 size={18} className="text-gray-400"/>
+                                        {year}년 항목별 상세 흐름
                                     </h3>
                                     <span className={`text-xs ${theme.subText}`}>1월 - 12월</span>
                                 </div>
                                 
-                                {/* 1. 복합 차트 (HTML Bar + SVG Line) */}
-                                <div className="overflow-x-auto pb-4 mb-6">
-                                    <div className="min-w-[500px] h-72 relative">
-                                        
-                                        {/* HTML Bars Layer */}
-                                        <div className="absolute inset-0 flex items-end px-2 z-0">
-                                            {yearlyStats.monthlyData.map((stat, i) => {
-                                                const hIncome = (stat.income / yearlyStats.maxVal) * 90;
-                                                const hExpense = (stat.expense / yearlyStats.maxVal) * 90;
+                                <div className="overflow-x-auto border border-neutral-800 rounded-lg">
+                                    <table className="w-full text-xs text-left min-w-[800px]">
+                                        <thead className={`bg-neutral-900 ${theme.subText}`}>
+                                            <tr>
+                                                <th className="px-3 py-2 sticky left-0 bg-neutral-900 z-20 border-r border-neutral-800 font-bold text-gray-300">구분</th>
+                                                {[...Array(12)].map((_, i) => <th key={i} className="px-2 py-2 text-center border-r border-neutral-800 last:border-0 w-[60px] font-medium">{i+1}월</th>)}
+                                                <th className="px-3 py-2 text-right bg-neutral-900 sticky right-0 border-l border-neutral-800 z-20 font-bold text-gray-300">합계</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className={`divide-y divide-neutral-800 ${theme.cardText}`}>
+                                            {/* 1. 월별 요약 섹션 (상단 고정) */}
+                                            <tr className="bg-neutral-800/50 font-bold">
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-blue-400">월 수입 총액</td>
+                                                {yearlyStats.monthlyData.map((stat, i) => (
+                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-blue-400">{formatCompactNumber(stat.income)}</td>
+                                                ))}
+                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-blue-400">
+                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.income, 0))}
+                                                </td>
+                                            </tr>
+                                            <tr className="bg-neutral-800/50 font-bold">
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-rose-400">월 지출 총액</td>
+                                                {yearlyStats.monthlyData.map((stat, i) => (
+                                                    <td key={i} className="px-2 py-2 text-center border-r border-neutral-800 text-rose-400">{formatCompactNumber(stat.expense)}</td>
+                                                ))}
+                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-rose-400">
+                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.expense, 0))}
+                                                </td>
+                                            </tr>
+                                            <tr className="bg-neutral-800/80 font-bold border-b-2 border-neutral-700">
+                                                <td className="px-3 py-2 sticky left-0 bg-neutral-800 z-10 border-r border-neutral-700 text-white">월 잔액</td>
+                                                {yearlyStats.monthlyData.map((stat, i) => (
+                                                    <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 ${stat.balance >= 0 ? 'text-blue-300' : 'text-rose-300'}`}>
+                                                        {formatCompactNumber(stat.balance)}
+                                                    </td>
+                                                ))}
+                                                <td className="px-3 py-2 text-right sticky right-0 bg-neutral-800 border-l border-neutral-700 text-white">
+                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.balance, 0))}
+                                                </td>
+                                            </tr>
+
+                                            {/* 2. 항목별 상세 내용 */}
+                                            <tr className="bg-blue-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-blue-400">수입 항목 상세</td></tr>
+                                            {Object.entries(yearlyStats.categoryData.income).map(([cat, months]) => {
+                                                const total = months.reduce((a, b) => a + b, 0);
+                                                if (total === 0) return null;
                                                 return (
-                                                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2">
-                                                        <div className="flex gap-1 items-end h-full w-full justify-center">
-                                                            {/* 수입 막대 */}
-                                                            {stat.income > 0 && (
-                                                                <div 
-                                                                    className="w-5 sm:w-8 bg-blue-600 rounded-t relative flex flex-col justify-end items-center chart-bar" 
-                                                                    style={{ height: `${hIncome}%`, minHeight: '24px' }}
-                                                                >
-                                                                    {hIncome > 10 && <span className="text-[9px] text-white font-medium mb-1 drop-shadow-md whitespace-nowrap">{formatCompactNumber(stat.income)}</span>}
-                                                                </div>
-                                                            )}
-                                                            {/* 지출 막대 */}
-                                                            {stat.expense > 0 && (
-                                                                <div 
-                                                                    className="w-5 sm:w-8 bg-rose-600 rounded-t relative flex flex-col justify-end items-center chart-bar" 
-                                                                    style={{ height: `${hExpense}%`, minHeight: '24px' }}
-                                                                >
-                                                                    {hExpense > 10 && <span className="text-[9px] text-white font-medium mb-1 drop-shadow-md whitespace-nowrap">{formatCompactNumber(stat.expense)}</span>}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <span className={`text-xs font-bold ${month === i ? theme.cardText : theme.subText}`}>{stat.month}월</span>
-                                                    </div>
+                                                    <tr key={cat} className="hover:bg-neutral-800/50">
+                                                        <td className="px-3 py-2 font-medium sticky left-0 bg-black z-10 border-r border-neutral-800">{cat}</td>
+                                                        {months.map((amt, i) => (
+                                                            <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 last:border-0 ${amt > 0 ? 'text-blue-400/80' : 'text-neutral-600'}`}>
+                                                                {formatCompactNumber(amt)}
+                                                            </td>
+                                                        ))}
+                                                        <td className="px-3 py-2 text-right font-bold text-blue-500 sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(total)}</td>
+                                                    </tr>
                                                 );
                                             })}
-                                        </div>
 
-                                        {/* SVG Line Layer (Overlay) - 0~100 Coordinate System */}
-                                        <svg className="absolute inset-0 w-full h-[85%] z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                            <path 
-                                                d={getSmoothPath(yearlyStats.monthlyData, yearlyStats.maxVal)} 
-                                                fill="none" 
-                                                stroke="#2dd4bf" 
-                                                strokeWidth="0.5" 
-                                                strokeLinecap="round" 
-                                                className="chart-line"
-                                                style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}
-                                            />
-                                        </svg>
-
-                                        {/* HTML Points Layer (for perfect circles) */}
-                                        <div className="absolute inset-0 w-full h-[85%] z-20 pointer-events-none">
-                                            {yearlyStats.monthlyData.map((stat, i) => {
-                                                const xPercent = (i * (100 / 12)) + (100 / 24);
-                                                const val = Math.max(0, stat.balance);
-                                                const yPercent = (val / yearlyStats.maxVal) * 90; // 90% matches graph scale
-                                                
+                                            <tr className="bg-rose-900/20 font-bold"><td colSpan="14" className="px-3 py-2 text-rose-400">지출 항목 상세</td></tr>
+                                            {Object.entries(yearlyStats.categoryData.expense).map(([cat, months]) => {
+                                                const total = months.reduce((a, b) => a + b, 0);
+                                                if (total === 0) return null;
                                                 return (
-                                                    <div 
-                                                        key={i} 
-                                                        className="absolute flex flex-col items-center justify-center transform -translate-x-1/2 translate-y-1/2"
-                                                        style={{ left: `${xPercent}%`, bottom: `${yPercent}%` }}
-                                                    >
-                                                        <div className="w-1.5 h-1.5 bg-teal-400 rounded-full border border-white shadow-sm mb-1"></div>
-                                                        {stat.balance !== 0 && (
-                                                            <span className="text-[9px] text-teal-400 font-bold drop-shadow-md bg-black/50 px-1 rounded -mt-4">{formatCompactNumber(stat.balance)}</span>
-                                                        )}
-                                                    </div>
+                                                    <tr key={cat} className="hover:bg-neutral-800/50">
+                                                        <td className="px-3 py-2 font-medium sticky left-0 bg-black z-10 border-r border-neutral-800">{cat}</td>
+                                                        {months.map((amt, i) => (
+                                                            <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 last:border-0 ${amt > 0 ? 'text-rose-400/80' : 'text-neutral-600'}`}>
+                                                                {formatCompactNumber(amt)}
+                                                            </td>
+                                                        ))}
+                                                        <td className="px-3 py-2 text-right font-bold text-rose-500 sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(total)}</td>
+                                                    </tr>
                                                 );
                                             })}
-                                        </div>
-
-                                    </div>
-                                </div>
-
-                                <div className="mt-8">
-                                    <h4 className={`text-sm font-bold mb-4 ${theme.cardText}`}>항목별 상세 흐름</h4>
-                                    <div className="overflow-x-auto border border-neutral-800 rounded-lg">
-                                        <table className="w-full text-xs text-left min-w-[800px]">
-                                            <thead className={`bg-neutral-900 ${theme.subText}`}>
-                                                <tr>
-                                                    <th className="px-3 py-2 sticky left-0 bg-neutral-900 z-10 border-r border-neutral-800">항목</th>
-                                                    {[...Array(12)].map((_, i) => <th key={i} className="px-2 py-2 text-center border-r border-neutral-800 last:border-0 w-[60px]">{i+1}월</th>)}
-                                                    <th className="px-3 py-2 text-right bg-neutral-900 sticky right-0 border-l border-neutral-800">합계</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className={`divide-y divide-neutral-800 ${theme.cardText}`}>
-                                                <tr className="bg-blue-900/10 font-bold"><td colSpan="14" className="px-3 py-1.5 text-blue-400">수입</td></tr>
-                                                {Object.entries(yearlyStats.categoryData.income).map(([cat, months]) => {
-                                                    const total = months.reduce((a, b) => a + b, 0);
-                                                    if (total === 0) return null;
-                                                    return (
-                                                        <tr key={cat} className="hover:bg-neutral-800/50">
-                                                            <td className="px-3 py-2 font-medium sticky left-0 bg-black z-10 border-r border-neutral-800">{cat}</td>
-                                                            {months.map((amt, i) => (
-                                                                <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 last:border-0 ${amt > 0 ? 'text-blue-400' : 'text-neutral-600'}`}>
-                                                                    {amt > 0 ? formatCompactNumber(amt) : '-'}
-                                                                </td>
-                                                            ))}
-                                                            <td className="px-3 py-2 text-right font-bold text-blue-500 sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(total)}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-
-                                                <tr className="bg-rose-900/10 font-bold"><td colSpan="14" className="px-3 py-1.5 text-rose-400">지출</td></tr>
-                                                {Object.entries(yearlyStats.categoryData.expense).map(([cat, months]) => {
-                                                    const total = months.reduce((a, b) => a + b, 0);
-                                                    if (total === 0) return null;
-                                                    return (
-                                                        <tr key={cat} className="hover:bg-neutral-800/50">
-                                                            <td className="px-3 py-2 font-medium sticky left-0 bg-black z-10 border-r border-neutral-800">{cat}</td>
-                                                            {months.map((amt, i) => (
-                                                                <td key={i} className={`px-2 py-2 text-center border-r border-neutral-800 last:border-0 ${amt > 0 ? 'text-rose-400' : 'text-neutral-600'}`}>
-                                                                    {amt > 0 ? formatCompactNumber(amt) : '-'}
-                                                                </td>
-                                                            ))}
-                                                            <td className="px-3 py-2 text-right font-bold text-rose-500 sticky right-0 bg-black border-l border-neutral-800">{formatCompactNumber(total)}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}
