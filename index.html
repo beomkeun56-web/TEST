@@ -79,7 +79,7 @@
             });
 
             useEffect(() => {
-                const savedData = localStorage.getItem('bk_budget_data_v3');
+                const savedData = localStorage.getItem('bk_budget_data_v4');
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
@@ -96,7 +96,7 @@
             useEffect(() => {
                 if (isLoaded) {
                     const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories };
-                    localStorage.setItem('bk_budget_data_v3', JSON.stringify(dataToSave));
+                    localStorage.setItem('bk_budget_data_v4', JSON.stringify(dataToSave));
                 }
             }, [initialBalance, currency, isDarkMode, transactions, categories, isLoaded]);
 
@@ -159,7 +159,6 @@
                 return { stats, finalBalance: runningBalance };
             }, [sortedTransactions, initialBalance]);
 
-            // [추가] 전체 누적 통계 계산 (All Time)
             const allTimeStats = useMemo(() => {
                 let income = 0;
                 let expense = 0;
@@ -174,6 +173,15 @@
             const categoryStats = useMemo(() => {
                 const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
                 const endStr = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+                
+                let carryover = Number(initialBalance);
+                transactions.forEach(t => {
+                    if (t.date < startStr) {
+                        if (t.type === 'income') carryover += Number(t.amount);
+                        else carryover -= Number(t.amount);
+                    }
+                });
+
                 const currentMonthTrans = transactions.filter(t => t.date >= startStr && t.date <= endStr);
                 const incomeMap = {};
                 const expenseMap = {};
@@ -185,14 +193,16 @@
                 const sortStats = (map) => Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
                 const totalIncome = Object.values(incomeMap).reduce((a, b) => a + b, 0);
                 const totalExpense = Object.values(expenseMap).reduce((a, b) => a + b, 0);
+                
                 return {
                     income: sortStats(incomeMap),
                     expense: sortStats(expenseMap),
                     totalIncome,
                     totalExpense,
-                    monthBalance: totalIncome - totalExpense
+                    monthBalance: totalIncome - totalExpense,
+                    carryover 
                 };
-            }, [transactions, year, month]);
+            }, [transactions, year, month, initialBalance]);
 
             const getBalanceAtDate = (targetDateStr) => {
                 let balance = Number(initialBalance); 
@@ -306,8 +316,12 @@
                                     </div>
                                     <span className="text-xs font-medium px-2 py-1 rounded bg-neutral-800 text-gray-400">월간 현황</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2 text-center divide-x divide-neutral-800">
-                                    <div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center divide-x divide-neutral-800/0 sm:divide-x sm:divide-neutral-800">
+                                    <div className="mb-2 sm:mb-0">
+                                        <p className={`text-xs ${theme.subText} mb-1`}>전월 이월</p>
+                                        <p className={`font-bold text-sm sm:text-base ${theme.cardText}`}>{formatCurrency(categoryStats.carryover, currency)}</p>
+                                    </div>
+                                    <div className="mb-2 sm:mb-0">
                                         <p className={`text-xs ${theme.subText} mb-1`}>수입</p>
                                         <p className={`font-bold text-sm sm:text-base ${theme.incomeText}`}>{formatCurrency(categoryStats.totalIncome, currency)}</p>
                                     </div>
@@ -316,15 +330,15 @@
                                         <p className={`font-bold text-sm sm:text-base ${theme.expenseText}`}>{formatCurrency(categoryStats.totalExpense, currency)}</p>
                                     </div>
                                     <div>
-                                        <p className={`text-xs ${theme.subText} mb-1`}>월 수지(잔액)</p>
-                                        <p className={`font-bold text-sm sm:text-base ${categoryStats.monthBalance >= 0 ? theme.cardText : theme.expenseText}`}>
+                                        <p className={`text-xs ${theme.subText} mb-1`}>월 수지</p>
+                                        <p className={`font-bold text-sm sm:text-base ${categoryStats.monthBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
                                             {formatCurrency(categoryStats.monthBalance, currency)}
                                         </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* [수정] 우측: 누적 총 자산 상세 내역 (수입/지출/잔액 분리) */}
+                            {/* 우측: 누적 총 자산 상세 내역 */}
                             <div className={`md:col-span-1 rounded-xl border p-4 flex flex-col justify-center relative overflow-hidden ${isDarkMode ? 'bg-blue-900/10 border-blue-800/30' : 'bg-blue-50 border-blue-200'}`}>
                                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                                 <div className="flex items-center gap-2 mb-3 pb-2 border-b border-blue-500/20">
@@ -443,39 +457,44 @@
                                     </div>
                                 </div>
 
-                                <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
-                                    <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingDown size={18} className="text-rose-500"/>지출 분석</h3>
-                                    <div className="space-y-3">
-                                        {categoryStats.expense.map((item, idx) => (
-                                            <div key={item.name}>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className={theme.cardText}>{item.name}</span>
-                                                    <span className={theme.expenseText}>{formatCurrency(item.value, currency)} ({categoryStats.totalExpense > 0 ? Math.round(item.value / categoryStats.totalExpense * 100) : 0}%)</span>
+                                {/* [수정] 좌우 배치를 위한 그리드 컨테이너 추가 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* 지출 통계 (좌측) */}
+                                    <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
+                                        <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingDown size={18} className="text-rose-500"/>지출 분석</h3>
+                                        <div className="space-y-3">
+                                            {categoryStats.expense.map((item, idx) => (
+                                                <div key={item.name}>
+                                                    <div className="flex justify-between text-xs mb-1">
+                                                        <span className={theme.cardText}>{item.name}</span>
+                                                        <span className={theme.expenseText}>{formatCurrency(item.value, currency)} ({categoryStats.totalExpense > 0 ? Math.round(item.value / categoryStats.totalExpense * 100) : 0}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
+                                                        <div className="bg-rose-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalExpense > 0 ? (item.value / categoryStats.totalExpense) * 100 : 0}%` }}></div>
+                                                    </div>
                                                 </div>
-                                                <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
-                                                    <div className="bg-rose-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalExpense > 0 ? (item.value / categoryStats.totalExpense) * 100 : 0}%` }}></div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {categoryStats.expense.length === 0 && <p className={`text-center text-sm py-4 ${theme.subText}`}>지출 내역이 없습니다.</p>}
+                                            ))}
+                                            {categoryStats.expense.length === 0 && <p className={`text-center text-sm py-4 ${theme.subText}`}>지출 내역이 없습니다.</p>}
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
-                                    <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingUp size={18} className="text-blue-500"/>수입 분석</h3>
-                                    <div className="space-y-3">
-                                        {categoryStats.income.map((item, idx) => (
-                                            <div key={item.name}>
-                                                <div className="flex justify-between text-xs mb-1">
-                                                    <span className={theme.cardText}>{item.name}</span>
-                                                    <span className={theme.incomeText}>{formatCurrency(item.value, currency)} ({categoryStats.totalIncome > 0 ? Math.round(item.value / categoryStats.totalIncome * 100) : 0}%)</span>
+                                    {/* 수입 통계 (우측) */}
+                                    <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
+                                        <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingUp size={18} className="text-blue-500"/>수입 분석</h3>
+                                        <div className="space-y-3">
+                                            {categoryStats.income.map((item, idx) => (
+                                                <div key={item.name}>
+                                                    <div className="flex justify-between text-xs mb-1">
+                                                        <span className={theme.cardText}>{item.name}</span>
+                                                        <span className={theme.incomeText}>{formatCurrency(item.value, currency)} ({categoryStats.totalIncome > 0 ? Math.round(item.value / categoryStats.totalIncome * 100) : 0}%)</span>
+                                                    </div>
+                                                    <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
+                                                        <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalIncome > 0 ? (item.value / categoryStats.totalIncome) * 100 : 0}%` }}></div>
+                                                    </div>
                                                 </div>
-                                                <div className="w-full bg-neutral-800 rounded-full h-2.5 overflow-hidden">
-                                                    <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${categoryStats.totalIncome > 0 ? (item.value / categoryStats.totalIncome) * 100 : 0}%` }}></div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {categoryStats.income.length === 0 && <p className={`text-center text-sm py-4 ${theme.subText}`}>수입 내역이 없습니다.</p>}
+                                            ))}
+                                            {categoryStats.income.length === 0 && <p className={`text-center text-sm py-4 ${theme.subText}`}>수입 내역이 없습니다.</p>}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
