@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v1.7</title>
+    <title>BK v1.8</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
     {
@@ -19,6 +19,10 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         button { touch-action: manipulation; }
+        /* 그래프 애니메이션 */
+        .chart-bar { transition: height 0.5s ease-out; }
+        .chart-line { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: draw 1s forwards ease-out; }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
     </style>
 </head>
 <body class="bg-black text-gray-100 font-sans selection:bg-blue-500 selection:text-white">
@@ -29,7 +33,7 @@
         import { createRoot } from 'react-dom/client';
         import { ChevronLeft, ChevronRight, Plus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart } from 'lucide-react';
 
-        const APP_VERSION = "v1.7";
+        const APP_VERSION = "v1.8";
 
         const formatCurrency = (amount, currency) => {
             const options = { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: 0 };
@@ -40,6 +44,7 @@
             if (number === 0) return '';
             if (Math.abs(number) < 10000) return new Intl.NumberFormat('ko-KR').format(number);
             const val = number / 10000;
+            // 10만, 5.7만 등 소수점 정리
             return val.toFixed(val % 1 === 0 ? 0 : 1) + '만';
         };
 
@@ -87,6 +92,7 @@
                 desc: ''
             });
 
+            // 초기 로딩
             useEffect(() => {
                 const savedData = localStorage.getItem('bk_budget_data_v5');
                 if (savedData) {
@@ -102,6 +108,7 @@
                 setIsLoaded(true);
             }, []);
 
+            // 저장
             useEffect(() => {
                 if (isLoaded) {
                     const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories };
@@ -109,6 +116,7 @@
                 }
             }, [initialBalance, currency, isDarkMode, transactions, categories, isLoaded]);
 
+            // 기본값 설정
             useEffect(() => {
                 if (isModalOpen && !editingId) {
                     const currentCats = newTrans.type === 'income' ? categories.income : categories.expense;
@@ -136,7 +144,7 @@
                 reader.onload = (e) => {
                     try {
                         const parsed = JSON.parse(e.target.result);
-                        if (window.confirm("복원하시겠습니까?")) {
+                        if (window.confirm("복원하시겠습니까? 기존 데이터는 삭제됩니다.")) {
                             if (parsed.initialBalance !== undefined) setInitialBalance(parsed.initialBalance);
                             if (parsed.currency) setCurrency(parsed.currency);
                             if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode);
@@ -212,17 +220,20 @@
                     if (Math.abs(s.balance) > maxVal) maxVal = Math.abs(s.balance);
                 });
 
-                maxVal = maxVal * 1.2 || 1; // 상단 여백 확보
+                maxVal = maxVal * 1.2 || 1; 
 
                 return { monthlyData, categoryData, maxVal }; 
             }, [transactions, year, categories]);
 
-            const getSmoothPath = (data, maxVal, width, height) => {
+            // 곡선 생성 함수 (0~100 좌표계 사용)
+            const getSmoothPath = (data, maxVal) => {
                 if (data.length === 0) return "";
                 const points = data.map((d, i) => {
-                    const x = (i * (width / 12)) + (width / 24); // 각 월의 중앙에 포인트
+                    // X: 12개월을 0~100으로 분할 (각 월의 중앙)
+                    const x = (i * (100 / 12)) + (100 / 24); 
                     const val = Math.max(0, d.balance);
-                    const y = height - (val / maxVal) * height;
+                    // Y: 0~100 (100이 바닥)
+                    const y = 100 - (val / maxVal) * 90; // 90% 높이만 사용 (여백)
                     return [x, y];
                 });
 
@@ -403,7 +414,6 @@
 
             if (!isLoaded) return null; 
 
-            // 전월 대비 증감 렌더링
             const renderComparison = (currentVal, category, type) => {
                 const prevMap = type === 'income' ? categoryStats.prevIncomeMap : categoryStats.prevExpenseMap;
                 const prevVal = prevMap[category] || 0;
@@ -444,6 +454,7 @@
                     </header>
 
                     <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
+                        {/* 1. 상단 대시보드 */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                             <div className={`md:col-span-2 rounded-xl border p-4 ${theme.card}`}>
                                 <div className="flex justify-between items-center mb-4">
@@ -629,79 +640,78 @@
                                     <span className={`text-xs ${theme.subText}`}>1월 - 12월</span>
                                 </div>
                                 
+                                {/* 1. 복합 차트 (HTML Bar + SVG Line) */}
                                 <div className="overflow-x-auto pb-4 mb-6">
-                                    <div className="min-w-[500px] h-64 relative">
-                                        <svg width="100%" height="100%" viewBox="0 0 500 250" preserveAspectRatio="none">
+                                    <div className="min-w-[500px] h-72 relative">
+                                        
+                                        {/* HTML Bars Layer */}
+                                        <div className="absolute inset-0 flex items-end px-2 z-0">
                                             {yearlyStats.monthlyData.map((stat, i) => {
-                                                const barWidth = 16; 
-                                                const gap = 4;
-                                                const xBase = (i / 11) * 460 + 10;
-                                                
-                                                const hIncome = (stat.income / yearlyStats.maxVal) * 200;
-                                                const hExpense = (stat.expense / yearlyStats.maxVal) * 200;
-                                                
+                                                const hIncome = (stat.income / yearlyStats.maxVal) * 90;
+                                                const hExpense = (stat.expense / yearlyStats.maxVal) * 90;
                                                 return (
-                                                    <g key={i}>
-                                                        {stat.income > 0 && (
-                                                            <g>
-                                                                <rect x={xBase - barWidth - gap/2} y={230 - hIncome} width={barWidth} height={hIncome} rx="2" fill="#3b82f6" />
-                                                                {hIncome > 15 && (
-                                                                    <text x={xBase - barWidth/2 - gap/2} y={225} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
-                                                                        {formatCompactNumber(stat.income)}
-                                                                    </text>
-                                                                )}
-                                                            </g>
-                                                        )}
-                                                        {stat.expense > 0 && (
-                                                            <g>
-                                                                <rect x={xBase + gap/2} y={230 - hExpense} width={barWidth} height={hExpense} rx="2" fill="#e11d48" />
-                                                                {hExpense > 15 && (
-                                                                    <text x={xBase + barWidth/2 + gap/2} y={225} textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">
-                                                                        {formatCompactNumber(stat.expense)}
-                                                                    </text>
-                                                                )}
-                                                            </g>
-                                                        )}
-                                                    </g>
-                                                )
-                                            })}
-
-                                            <path 
-                                                d={getSmoothPath(yearlyStats.monthlyData, yearlyStats.maxVal, 460, 230)} 
-                                                fill="none" 
-                                                stroke="#2dd4bf" 
-                                                strokeWidth="1.5" 
-                                                strokeLinecap="round" 
-                                                transform="translate(10, 0)" 
-                                                style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}
-                                            />
-
-                                            {yearlyStats.monthlyData.map((stat, i) => {
-                                                const xBase = (i / 11) * 460 + 10;
-                                                const val = Math.max(0, stat.balance);
-                                                const y = 230 - (val / yearlyStats.maxVal) * 230;
-                                                
-                                                return (
-                                                    <g key={i}>
-                                                        <circle cx={xBase} cy={y} r="3" fill="#2dd4bf" stroke="#fff" strokeWidth="1" />
-                                                        <text x={xBase} y={y - 8} textAnchor="middle" fill="#2dd4bf" fontSize="10" fontWeight="bold" style={{ textShadow: '0px 1px 2px rgba(0,0,0,0.8)' }}>
-                                                            {formatCompactNumber(stat.balance)}
-                                                        </text>
-                                                    </g>
-                                                );
-                                            })}
-                                        </svg>
-
-                                        <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                                            {yearlyStats.monthlyData.map((stat, i) => {
-                                                const xPercent = (i / 11) * 92 + 2; 
-                                                return (
-                                                    <div key={i} className="absolute h-full flex items-end justify-center" style={{ left: `${xPercent}%`, width: '40px', transform: 'translateX(-50%)', bottom: '20px' }}>
-                                                        <span className="absolute -bottom-6 text-[10px] text-gray-500">{stat.month}월</span>
+                                                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full gap-2">
+                                                        <div className="flex gap-1 items-end h-full w-full justify-center">
+                                                            {/* 수입 막대 */}
+                                                            {stat.income > 0 && (
+                                                                <div 
+                                                                    className="w-5 sm:w-8 bg-blue-600 rounded-t relative flex flex-col justify-end items-center chart-bar" 
+                                                                    style={{ height: `${hIncome}%`, minHeight: '24px' }}
+                                                                >
+                                                                    {hIncome > 10 && <span className="text-[9px] text-white font-medium mb-1 drop-shadow-md whitespace-nowrap">{formatCompactNumber(stat.income)}</span>}
+                                                                </div>
+                                                            )}
+                                                            {/* 지출 막대 */}
+                                                            {stat.expense > 0 && (
+                                                                <div 
+                                                                    className="w-5 sm:w-8 bg-rose-600 rounded-t relative flex flex-col justify-end items-center chart-bar" 
+                                                                    style={{ height: `${hExpense}%`, minHeight: '24px' }}
+                                                                >
+                                                                    {hExpense > 10 && <span className="text-[9px] text-white font-medium mb-1 drop-shadow-md whitespace-nowrap">{formatCompactNumber(stat.expense)}</span>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <span className={`text-xs font-bold ${month === i ? theme.cardText : theme.subText}`}>{stat.month}월</span>
                                                     </div>
                                                 );
                                             })}
                                         </div>
+
+                                        {/* SVG Line Layer (Overlay) - 0~100 Coordinate System */}
+                                        <svg className="absolute inset-0 w-full h-[85%] z-10 pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <path 
+                                                d={getSmoothPath(yearlyStats.monthlyData, yearlyStats.maxVal)} 
+                                                fill="none" 
+                                                stroke="#2dd4bf" 
+                                                strokeWidth="0.5" 
+                                                strokeLinecap="round" 
+                                                className="chart-line"
+                                                style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}
+                                            />
+                                        </svg>
+
+                                        {/* HTML Points Layer (for perfect circles) */}
+                                        <div className="absolute inset-0 w-full h-[85%] z-20 pointer-events-none">
+                                            {yearlyStats.monthlyData.map((stat, i) => {
+                                                const xPercent = (i * (100 / 12)) + (100 / 24);
+                                                const val = Math.max(0, stat.balance);
+                                                const yPercent = (val / yearlyStats.maxVal) * 90; // 90% matches graph scale
+                                                
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        className="absolute flex flex-col items-center justify-center transform -translate-x-1/2 translate-y-1/2"
+                                                        style={{ left: `${xPercent}%`, bottom: `${yPercent}%` }}
+                                                    >
+                                                        <div className="w-1.5 h-1.5 bg-teal-400 rounded-full border border-white shadow-sm mb-1"></div>
+                                                        {stat.balance !== 0 && (
+                                                            <span className="text-[9px] text-teal-400 font-bold drop-shadow-md bg-black/50 px-1 rounded -mt-4">{formatCompactNumber(stat.balance)}</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
                                     </div>
                                 </div>
 
