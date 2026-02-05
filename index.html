@@ -3,8 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BK v3.5</title>
+    <title>BK v3.5 Refined</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+                    },
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0a',
+                            card: '#171717',
+                            border: '#262626'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <script type="importmap">
     {
       "imports": {
@@ -16,19 +36,35 @@
     </script>
     <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
     <style>
+        /* Custom Scrollbar */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        button { touch-action: manipulation; }
+        
+        /* Modern Scrollbar for Webkit */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #525252; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #737373; }
+
+        button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
         .text-transition { transition: font-size 0.2s ease-in-out; }
+        
+        /* Glass Effect */
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+        .dark .glass { background: rgba(23, 23, 23, 0.7); backdrop-filter: blur(10px); }
+        
+        /* Animation */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-black text-gray-100 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden">
+<body class="bg-gray-50 text-gray-900 font-sans selection:bg-blue-500 selection:text-white overflow-x-hidden transition-colors duration-300">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module" data-presets="react">
         import React, { useState, useMemo, useEffect } from 'react';
         import { createRoot } from 'react-dom/client';
-        import { ChevronLeft, ChevronRight, Plus, Minus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2, StickyNote, FolderTree, Tag, ArrowRight } from 'lucide-react';
+        import { ChevronLeft, ChevronRight, Plus, Minus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2, StickyNote, FolderTree, Tag, ArrowRight, MoreHorizontal } from 'lucide-react';
 
         const APP_VERSION = "v3.5";
         
@@ -143,6 +179,16 @@
                     const dataToSave = { initialBalance, currency, isDarkMode, transactions, categories, mainCategories };
                     localStorage.setItem('bk_budget_data_v21', JSON.stringify(dataToSave)); 
                 }
+                // Apply dark mode class to body
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                    document.body.classList.add('bg-dark-bg', 'text-gray-100');
+                    document.body.classList.remove('bg-gray-50', 'text-gray-900');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    document.body.classList.remove('bg-dark-bg', 'text-gray-100');
+                    document.body.classList.add('bg-gray-50', 'text-gray-900');
+                }
             }, [initialBalance, currency, isDarkMode, transactions, categories, mainCategories, isLoaded]);
 
             const handleFontUp = () => { const newIndex = Math.min(fontIndex + 1, FONT_SIZES.length - 1); setFontIndex(newIndex); localStorage.setItem('bk_budget_font_idx', newIndex); };
@@ -178,17 +224,17 @@
                 reader.onload = (e) => {
                     try {
                         const parsed = JSON.parse(e.target.result);
-                        if (window.confirm("복원하시겠습니까?")) {
+                        if (window.confirm("데이터를 복원하시겠습니까? (현재 데이터는 덮어씌워집니다)")) {
                             if (parsed.initialBalance !== undefined) setInitialBalance(parsed.initialBalance);
                             if (parsed.currency) setCurrency(parsed.currency);
                             if (parsed.isDarkMode !== undefined) setIsDarkMode(parsed.isDarkMode);
                             if (parsed.transactions) setTransactions(parsed.transactions);
                             if (parsed.categories) setCategories(parsed.categories);
                             if (parsed.mainCategories) setMainCategories(parsed.mainCategories);
-                            alert("복원 완료");
+                            alert("복원 완료되었습니다.");
                             setIsSettingsOpen(false);
                         }
-                    } catch (err) { alert("파일 오류"); }
+                    } catch (err) { alert("파일 형식이 올바르지 않습니다."); }
                 };
                 reader.readAsText(file);
                 event.target.value = '';
@@ -364,7 +410,7 @@
             };
 
             const handleDelete = (id) => {
-                if (window.confirm("삭제하시겠습니까?")) {
+                if (window.confirm("정말 삭제하시겠습니까?")) {
                     setTransactions(transactions.filter(t => t.id !== id));
                     if (selectedDateDetail) setSelectedDateDetail(prev => ({ ...prev, items: prev.items.filter(i => i.id !== id) }));
                 }
@@ -381,7 +427,7 @@
                 const type = categoryTypeToAdd;
                 const targetState = isMain ? mainCategories : categories;
                 const setTargetState = isMain ? setMainCategories : setCategories;
-                if (targetState[type].includes(newCategoryName)) { alert('이미 존재함'); return; }
+                if (targetState[type].includes(newCategoryName)) { alert('이미 존재하는 항목입니다.'); return; }
                 setTargetState(prev => ({ ...prev, [type]: [...prev[type], newCategoryName] }));
                 setNewCategoryName('');
             };
@@ -389,60 +435,55 @@
             const handleDeleteCategory = (isMain, type, name) => {
                 const targetState = isMain ? mainCategories : categories;
                 const setTargetState = isMain ? setMainCategories : setCategories;
-                if (targetState[type].length <= 1) { alert('최소 1개 필수'); return; }
-                if (window.confirm('삭제하시겠습니까?')) {
+                if (targetState[type].length <= 1) { alert('최소 1개의 항목은 필수입니다.'); return; }
+                if (window.confirm(`${name} 항목을 삭제하시겠습니까?`)) {
                     setTargetState(prev => ({ ...prev, [type]: prev[type].filter(c => c !== name) }));
                 }
             };
 
             const calendarDays = generateCalendarDays(year, month);
             
+            // Design Tokens & Classes
             const theme = {
-                bg: isDarkMode ? 'bg-black' : 'bg-gray-50',
-                text: isDarkMode ? 'text-gray-100' : 'text-gray-800',
-                card: isDarkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-white border-gray-200',
+                bg: isDarkMode ? 'bg-dark-bg' : 'bg-gray-50',
+                text: isDarkMode ? 'text-gray-100' : 'text-gray-900',
+                card: isDarkMode ? 'bg-dark-card border-dark-border shadow-lg shadow-black/20' : 'bg-white border-gray-100 shadow-lg shadow-gray-200/50',
                 cardText: isDarkMode ? 'text-gray-200' : 'text-gray-900',
                 subText: isDarkMode ? 'text-gray-400' : 'text-gray-500',
-                border: isDarkMode ? 'border-neutral-800' : 'border-gray-200',
-                hover: isDarkMode ? 'hover:bg-neutral-800' : 'hover:bg-gray-50',
-                input: isDarkMode ? 'bg-neutral-800 border-neutral-700 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900',
-                header: isDarkMode ? 'bg-black border-neutral-800' : 'bg-white border-gray-200',
-                th: isDarkMode ? 'bg-neutral-900 text-gray-400' : 'bg-gray-50 text-gray-600',
+                border: isDarkMode ? 'border-dark-border' : 'border-gray-200',
+                hover: isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-100',
+                input: isDarkMode ? 'bg-[#262626] border-neutral-700 text-white placeholder-gray-500 focus:border-blue-500' : 'bg-white border-gray-200 text-gray-900 focus:border-blue-500',
+                header: isDarkMode ? 'bg-dark-bg/80 border-dark-border backdrop-blur-md' : 'bg-white/80 border-gray-200 backdrop-blur-md',
                 gridLine: isDarkMode ? 'border-neutral-800' : 'border-gray-100',
-                today: isDarkMode ? 'bg-indigo-900/40' : 'bg-indigo-50/30',
+                today: isDarkMode ? 'bg-blue-500/10 ring-1 ring-blue-500/50' : 'bg-blue-50 ring-1 ring-blue-500/30',
                 incomeText: isDarkMode ? 'text-blue-400' : 'text-blue-600',
-                incomeBg: isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100',
+                incomeBg: isDarkMode ? 'bg-blue-500/10' : 'bg-blue-50',
                 expenseText: isDarkMode ? 'text-rose-400' : 'text-rose-600',
-                expenseBg: isDarkMode ? 'bg-rose-500/20' : 'bg-red-100',
-            };
-
-            if (!isLoaded) return null; 
-
-            const renderComparison = (currentVal, category, type) => {
-                // 통계 탭 비교 기능은 현재 버전에서 간소화
-                return null;
+                expenseBg: isDarkMode ? 'bg-rose-500/10' : 'bg-rose-50',
+                accent: 'bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-md shadow-blue-500/20'
             };
 
             const currentFontSizeClass = FONT_SIZES[fontIndex];
             const currentTableFontSize = TABLE_FONT_SIZES[fontIndex];
 
+            // Sub-components for cleaner render
             const renderCategoryManager = (isMain) => {
                 const targetState = isMain ? mainCategories : categories;
                 return (
                     <div className="space-y-4">
-                        <div className="flex gap-2 p-1 bg-neutral-800 rounded mb-2">
-                            <button onClick={() => setCategoryTypeToAdd('income')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'income' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>수입 {isMain ? '대항목' : '소항목'}</button>
-                            <button onClick={() => setCategoryTypeToAdd('expense')} className={`flex-1 py-1.5 text-xs rounded ${categoryTypeToAdd === 'expense' ? 'bg-rose-600 text-white' : 'text-gray-400'}`}>지출 {isMain ? '대항목' : '소항목'}</button>
+                        <div className="flex gap-2 p-1 bg-gray-100 dark:bg-neutral-800 rounded-lg">
+                            <button onClick={() => setCategoryTypeToAdd('income')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${categoryTypeToAdd === 'income' ? 'bg-white dark:bg-neutral-700 shadow text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>수입 {isMain ? '대항목' : '소항목'}</button>
+                            <button onClick={() => setCategoryTypeToAdd('expense')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${categoryTypeToAdd === 'expense' ? 'bg-white dark:bg-neutral-700 shadow text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400'}`}>지출 {isMain ? '대항목' : '소항목'}</button>
                         </div>
                         <div className="flex gap-2">
-                            <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 항목 이름" className={`flex-1 rounded border px-3 py-2 text-sm ${theme.input}`} />
-                            <button onClick={() => handleAddCategory(isMain)} className="bg-blue-600 text-white px-3 py-2 rounded text-sm shrink-0">추가</button>
+                            <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="새 항목 이름" className={`flex-1 rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors ${theme.input}`} />
+                            <button onClick={() => handleAddCategory(isMain)} className={`px-4 py-2.5 rounded-lg text-sm font-medium shrink-0 ${theme.accent}`}>추가</button>
                         </div>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                        <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
                             {targetState[categoryTypeToAdd].map(cat => (
-                                <div key={cat} className={`flex justify-between items-center p-2 rounded border ${theme.border} ${theme.bg}`}>
-                                    <span className={`text-sm ${theme.cardText}`}>{cat}</span>
-                                    <button onClick={() => handleDeleteCategory(isMain, categoryTypeToAdd, cat)} className="text-gray-500 hover:text-red-500"><Trash2 size={14} /></button>
+                                <div key={cat} className={`flex justify-between items-center p-3 rounded-lg border ${theme.border} ${theme.bg}`}>
+                                    <span className={`text-sm font-medium ${theme.cardText}`}>{cat}</span>
+                                    <button onClick={() => handleDeleteCategory(isMain, categoryTypeToAdd, cat)} className="text-gray-400 hover:text-rose-500 transition-colors"><Trash2 size={16} /></button>
                                 </div>
                             ))}
                         </div>
@@ -450,432 +491,595 @@
                 );
             }
 
+            if (!isLoaded) return null; 
+
             return (
-                <div className={`min-h-screen font-sans transition-colors duration-200 ${theme.bg} ${theme.text} overflow-x-hidden ${currentFontSizeClass} text-transition`}>
-                    <header className={`sticky top-0 z-50 border-b ${theme.header}`}>
-                        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <div className="bg-blue-600 p-2 rounded-lg text-white"><CalendarIcon size={20} /></div>
-                                <div className="flex items-end gap-1">
-                                    <h1 className={`text-xl font-bold tracking-tight ${theme.cardText}`}>BK</h1>
-                                    <span className={`text-xs font-mono mb-1 ${theme.subText}`}>{APP_VERSION}</span>
+                <div className={`min-h-screen font-sans transition-colors duration-200 ${theme.bg} ${theme.text} ${currentFontSizeClass} text-transition pb-20 md:pb-10`}>
+                    {/* Header */}
+                    <header className={`sticky top-0 z-40 border-b ${theme.header}`}>
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/30">
+                                    <CalendarIcon size={20} strokeWidth={2.5} />
+                                </div>
+                                <div className="flex flex-col">
+                                    <h1 className={`text-lg font-bold tracking-tight leading-none ${theme.cardText}`}>BK Budget</h1>
+                                    <span className="text-[10px] font-medium text-blue-500/80 mt-0.5 font-mono tracking-wider">{APP_VERSION}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center bg-neutral-800 rounded-lg p-0.5 mr-2">
-                                    <button onClick={handleFontDown} className="p-1.5 text-gray-400 hover:text-white"><Minus size={14}/></button>
-                                    <span className="text-[10px] w-8 text-center text-gray-300 font-mono">{FONT_LABELS[fontIndex]}</span>
-                                    <button onClick={handleFontUp} className="p-1.5 text-gray-400 hover:text-white"><Plus size={14}/></button>
+                                {/* Font Size Controls */}
+                                <div className="hidden sm:flex items-center bg-gray-100 dark:bg-neutral-800 rounded-full px-2 py-1 mr-2">
+                                    <button onClick={handleFontDown} className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"><Minus size={14}/></button>
+                                    <span className="text-[10px] w-10 text-center font-mono text-gray-500">{FONT_LABELS[fontIndex]}</span>
+                                    <button onClick={handleFontUp} className="p-1.5 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors"><Plus size={14}/></button>
                                 </div>
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Sun size={20} /></button>
-                                <button onClick={() => { setIsSettingsOpen(true); setSettingsTab('general'); }} className={`p-2 rounded-full ${theme.hover} ${theme.subText}`}><Settings size={20} /></button>
-                                <button onClick={() => { setEditingId(null); setIsModalOpen(true); }} className="ml-2 bg-blue-600 text-white px-3 py-2 rounded-md"><Plus size={16} /></button>
+                                
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2.5 rounded-full transition-all ${theme.hover} text-gray-500 hover:text-amber-400`}>
+                                    {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                                </button>
+                                <button onClick={() => { setIsSettingsOpen(true); setSettingsTab('general'); }} className={`p-2.5 rounded-full transition-all ${theme.hover} text-gray-500 hover:text-blue-500`}>
+                                    <Settings size={20} />
+                                </button>
+                                <button onClick={() => { setEditingId(null); setIsModalOpen(true); }} className={`ml-2 px-3 py-2 rounded-lg flex items-center gap-2 text-sm font-medium ${theme.accent}`}>
+                                    <Plus size={16} strokeWidth={3} /> <span className="hidden sm:inline">거래 추가</span>
+                                </button>
                             </div>
                         </div>
                     </header>
 
-                    <main className="max-w-6xl mx-auto px-4 py-6 pb-20">
-                        {/* 1. 상단 대시보드 */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            <div className={`md:col-span-1 rounded-xl border p-4 flex flex-col justify-center gap-2 relative overflow-hidden ${theme.card}`}>
-                                <div className="flex justify-between items-center text-[0.9em] border-b border-neutral-800 pb-2 mb-1">
-                                    <span className={theme.subText}>전월 이월</span>
-                                    <span className={theme.cardText}>{formatCurrency(categoryStats.carryover, currency)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[0.9em]">
-                                    <span className="text-blue-400 font-medium">이번 달 수입</span>
-                                    <span className="text-blue-400 font-bold">+{formatCurrency(categoryStats.monthlyIncome, currency)}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-2 mt-1 border-t border-neutral-700">
-                                    <span className="text-[0.8em] text-gray-400">총 가용 자금</span>
-                                    <span className={`text-[1.2em] font-bold ${theme.cardText}`}>{formatCurrency(categoryStats.totalRevenue, currency)}</span>
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in">
+                        {/* 1. Dashboard Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8">
+                            {/* Main Balance Card */}
+                            <div className={`md:col-span-6 lg:col-span-4 rounded-2xl p-6 relative overflow-hidden group ${isDarkMode ? 'bg-gradient-to-br from-neutral-900 to-neutral-800 border border-neutral-800' : 'bg-white border border-gray-100 shadow-xl shadow-gray-200/50'}`}>
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <p className={`text-sm font-medium ${theme.subText} mb-1`}>이번 달 최종 잔액</p>
+                                            <h2 className={`text-3xl font-bold tracking-tight ${categoryStats.finalBalance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>
+                                                {formatCurrency(categoryStats.finalBalance, currency)}
+                                            </h2>
+                                        </div>
+                                        <div className={`p-2 rounded-xl ${isDarkMode ? 'bg-neutral-800 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                            <Wallet size={24} />
+                                        </div>
+                                    </div>
+                                    <div className="pt-4 border-t border-dashed border-gray-200 dark:border-neutral-700 flex justify-between items-center text-sm">
+                                        <span className={theme.subText}>전체 누적 자산</span>
+                                        <span className={`font-semibold ${allTimeStats.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-rose-500'}`}>{formatCurrency(allTimeStats.balance, currency)}</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className={`md:col-span-1 rounded-xl border p-4 flex flex-col justify-center items-center gap-1 relative overflow-hidden ${isDarkMode ? 'bg-rose-900/10 border-rose-800/30' : 'bg-rose-50 border-rose-200'}`}>
-                                <TrendingDown size={24} className="text-rose-500 mb-1"/>
-                                <span className={theme.subText}>이번 달 총 지출</span>
-                                <span className="text-[1.5em] font-bold text-rose-500">{formatCurrency(categoryStats.monthlyExpense, currency)}</span>
-                            </div>
-
-                            <div className={`md:col-span-1 rounded-xl border p-4 flex flex-col justify-center items-center gap-1 relative overflow-hidden ${isDarkMode ? 'bg-blue-900/10 border-blue-800/30' : 'bg-blue-50 border-blue-200'}`}>
-                                <Wallet size={24} className="text-blue-500 mb-1"/>
-                                <span className={theme.subText}>최종 월 잔액</span>
-                                <span className={`text-[1.5em] font-bold ${categoryStats.finalBalance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>
-                                    {formatCurrency(categoryStats.finalBalance, currency)}
-                                </span>
-                            </div>
-                        </div>
-                        
-                         <div className={`rounded-xl border p-3 mb-6 flex justify-between items-center ${theme.card}`}>
-                            <div className="flex items-center gap-2"><Layers size={16} className="text-gray-400"/><span className={`text-xs ${theme.subText}`}>전체 누적 자산</span></div>
-                            <span className={`font-bold ${allTimeStats.balance >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>{formatCurrency(allTimeStats.balance, currency)}</span>
-                        </div>
-
-                        {/* 탭 메뉴 */}
-                        <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-800">
-                            <button onClick={() => setActiveTab('calendar')} className={`pb-3 px-4 font-medium flex items-center gap-2 border-b-2 ${activeTab === 'calendar' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><LayoutGrid size={18} />달력</button>
-                            <button onClick={() => setActiveTab('list')} className={`pb-3 px-4 font-medium flex items-center gap-2 border-b-2 ${activeTab === 'list' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><List size={18} />목록</button>
-                            <button onClick={() => setActiveTab('stats')} className={`pb-3 px-4 font-medium flex items-center gap-2 border-b-2 ${activeTab === 'stats' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><BarChart3 size={18} />통계</button>
-                            <button onClick={() => setActiveTab('yearly')} className={`pb-3 px-4 font-medium flex items-center gap-2 border-b-2 ${activeTab === 'yearly' ? `border-blue-500 text-blue-500` : `border-transparent ${theme.subText}`}`}><Table2 size={18} />연간</button>
-                        </div>
-
-                        {/* 캘린더 뷰 */}
-                        {activeTab === 'calendar' && (
-                            <div className={`rounded-xl shadow border overflow-hidden ${theme.card}`}>
-                                <div className="flex justify-between items-center p-4 border-b border-neutral-800">
-                                    <button onClick={handlePrevMonth} className={`p-1 rounded ${theme.hover}`}><ChevronLeft size={20}/></button>
-                                    <span className={`font-bold ${theme.cardText}`}>{year}년 {month + 1}월</span>
-                                    <button onClick={handleNextMonth} className={`p-1 rounded ${theme.hover}`}><ChevronRight size={20}/></button>
+                            {/* Stats Summary Cards */}
+                            <div className="md:col-span-6 lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* Income Card */}
+                                <div className={`rounded-2xl p-5 border flex flex-col justify-center ${theme.card}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><TrendingUp size={18} /></div>
+                                        <span className={`text-sm font-medium ${theme.subText}`}>이번 달 수입</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-bold text-blue-500">+{formatCompactNumber(categoryStats.monthlyIncome)}</span>
+                                        <span className="text-xs text-gray-400">원</span>
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        전월 이월: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCompactNumber(categoryStats.carryover)}</span>
+                                    </div>
                                 </div>
-                                <div className={`grid grid-cols-7 border-b ${theme.border} ${theme.th}`}>
-                                    {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => (<div key={day} className={`py-3 text-center font-semibold ${idx === 0 ? 'text-red-500' : idx === 6 ? 'text-blue-500' : ''}`}>{day}</div>))}
-                                </div>
-                                <div className="grid grid-cols-7 auto-rows-fr">
-                                    {calendarDays.map((item, idx) => {
-                                        if (!item.day) return <div key={`empty-${idx}`} className={`min-h-[100px] sm:min-h-[140px] p-1 border-b border-r last:border-r-0 relative cursor-pointer ${theme.gridLine} ${theme.hover} ${isToday ? theme.today : ''}`}></div>;
-                                        const dateStats = dailyStatsMap.stats[item.dateStr];
-                                        const currentBalance = dateStats ? dateStats.balance : getBalanceAtDate(item.dateStr);
-                                        const isToday = item.dateStr === new Date().toISOString().split('T')[0];
-                                        const dayTransactions = transactions.filter(t => t.date === item.dateStr);
 
-                                        return (
-                                            <div key={item.dateStr} onClick={() => handleDateClick(item.dateStr)} className={`min-h-[100px] sm:min-h-[140px] p-1 border-b border-r last:border-r-0 relative cursor-pointer ${theme.gridLine} ${theme.hover} ${isToday ? theme.today : ''}`}>
-                                                <div className="flex flex-col h-full justify-start gap-1">
-                                                    {/* 상단: 날짜 + 요약 */}
-                                                    <div className="flex flex-col sm:flex-row justify-between items-start w-full gap-1 flex-shrink-0">
-                                                        <span className={`text-[0.8em] font-medium w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : theme.subText}`}>{item.day}</span>
-                                                        
-                                                        <div className="flex flex-row flex-wrap justify-end gap-x-1.5 gap-y-0.5 items-baseline w-full">
-                                                            {dateStats?.income > 0 && <span className="text-[0.65em] text-blue-400">+{formatCompactNumber(dateStats.income)}</span>}
-                                                            {dateStats?.expense > 0 && <span className="text-[0.65em] text-rose-400">-{formatCompactNumber(dateStats.expense)}</span>}
-                                                            <span className={`text-[0.65em] ${currentBalance < 0 ? 'text-rose-500 font-bold' : 'text-white'}`}>{formatCompactNumber(currentBalance)}</span>
+                                {/* Expense Card */}
+                                <div className={`rounded-2xl p-5 border flex flex-col justify-center ${theme.card}`}>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><TrendingDown size={18} /></div>
+                                        <span className={`text-sm font-medium ${theme.subText}`}>이번 달 지출</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-bold text-rose-500">-{formatCompactNumber(categoryStats.monthlyExpense)}</span>
+                                        <span className="text-xs text-gray-400">원</span>
+                                    </div>
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        가용 자금: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCompactNumber(categoryStats.totalRevenue)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Quick Actions (Hidden on mobile small, shown on larger screens) */}
+                                <div className="hidden lg:flex rounded-2xl p-5 border border-dashed border-gray-300 dark:border-neutral-700 flex-col justify-center items-center gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors" onClick={() => { setEditingId(null); setIsModalOpen(true); }}>
+                                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
+                                        <Plus size={24} />
+                                    </div>
+                                    <span className={`text-sm font-medium ${theme.cardText}`}>빠른 거래 추가</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Navigation Tabs (Segmented Control) */}
+                        <div className="mb-6 overflow-x-auto scrollbar-hide">
+                            <div className="flex p-1 bg-gray-200/50 dark:bg-neutral-800/50 rounded-xl min-w-max">
+                                {[
+                                    { id: 'calendar', icon: LayoutGrid, label: '달력' },
+                                    { id: 'list', icon: List, label: '목록' },
+                                    { id: 'stats', icon: BarChart3, label: '통계' },
+                                    { id: 'yearly', icon: Table2, label: '연간 흐름' }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                                            activeTab === tab.id 
+                                            ? 'bg-white dark:bg-neutral-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                        }`}
+                                    >
+                                        <tab.icon size={16} />
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Views Content */}
+                        <div className="min-h-[500px]">
+                            {/* 1. Calendar View */}
+                            {activeTab === 'calendar' && (
+                                <div className={`rounded-2xl shadow-sm border overflow-hidden animate-fade-in ${theme.card}`}>
+                                    <div className="flex justify-between items-center p-4 sm:p-6 border-b border-gray-100 dark:border-neutral-800">
+                                        <h2 className={`text-xl font-bold ${theme.cardText} flex items-center gap-2`}>
+                                            <CalendarIcon size={24} className="text-blue-500" />
+                                            {year}년 {month + 1}월
+                                        </h2>
+                                        <div className="flex gap-1">
+                                            <button onClick={handlePrevMonth} className={`p-2 rounded-lg ${theme.hover} text-gray-500 hover:text-gray-900 dark:hover:text-white`}><ChevronLeft size={20}/></button>
+                                            <button onClick={handleNextMonth} className={`p-2 rounded-lg ${theme.hover} text-gray-500 hover:text-gray-900 dark:hover:text-white`}><ChevronRight size={20}/></button>
+                                        </div>
+                                    </div>
+                                    <div className={`grid grid-cols-7 border-b ${theme.border} ${isDarkMode ? 'bg-neutral-900/50' : 'bg-gray-50'}`}>
+                                        {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => (
+                                            <div key={day} className={`py-3 text-center text-xs font-semibold uppercase tracking-wider ${idx === 0 ? 'text-rose-500' : idx === 6 ? 'text-blue-500' : 'text-gray-500'}`}>{day}</div>
+                                        ))}
+                                    </div>
+                                    <div className="grid grid-cols-7 auto-rows-fr bg-gray-200 dark:bg-neutral-800 gap-[1px]">
+                                        {calendarDays.map((item, idx) => {
+                                            if (!item.day) return <div key={`empty-${idx}`} className={`${theme.bg} min-h-[100px] sm:min-h-[140px]`}></div>;
+                                            
+                                            const dateStats = dailyStatsMap.stats[item.dateStr];
+                                            const currentBalance = dateStats ? dateStats.balance : getBalanceAtDate(item.dateStr);
+                                            const isToday = item.dateStr === new Date().toISOString().split('T')[0];
+                                            const dayTransactions = transactions.filter(t => t.date === item.dateStr);
+                                            const isWeekend = idx % 7 === 0 || idx % 7 === 6;
+
+                                            return (
+                                                <div 
+                                                    key={item.dateStr} 
+                                                    onClick={() => handleDateClick(item.dateStr)} 
+                                                    className={`${theme.bg} min-h-[100px] sm:min-h-[140px] p-1.5 sm:p-2 relative cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800/80 transition-colors group flex flex-col gap-1`}
+                                                >
+                                                    {isToday && <div className="absolute inset-0 border-2 border-blue-500/30 pointer-events-none z-0"></div>}
+                                                    
+                                                    <div className="flex justify-between items-start z-10">
+                                                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isWeekend ? (idx % 7 === 0 ? 'text-rose-500' : 'text-blue-500') : theme.subText}`}>
+                                                            {item.day}
+                                                        </span>
+                                                        <div className="flex flex-col items-end gap-0.5">
+                                                            {dateStats?.income > 0 && <span className="text-[10px] sm:text-xs font-medium text-blue-500 bg-blue-500/5 px-1 rounded">+{formatCompactNumber(dateStats.income)}</span>}
+                                                            {dateStats?.expense > 0 && <span className="text-[10px] sm:text-xs font-medium text-rose-500 bg-rose-500/5 px-1 rounded">-{formatCompactNumber(dateStats.expense)}</span>}
                                                         </div>
                                                     </div>
 
-                                                    {/* 하단: 거래 리스트 (소항목 + 내용) */}
-                                                    <div className="flex flex-col gap-0.5 overflow-y-auto scrollbar-hide flex-grow max-h-[80px]">
-                                                        {dayTransactions.map((t) => (
-                                                            <div key={t.id} className={`text-[0.7em] flex justify-between items-center px-1 py-0.5 rounded ${t.type === 'income' ? `${theme.incomeBg} ${theme.incomeText}` : `${theme.expenseBg} ${theme.expenseText}`}`}>
-                                                                <div className="flex items-center gap-1 truncate max-w-[65%]">
-                                                                    {/* [복구] 소항목(Category) 태그 추가 */}
-                                                                    <span className="opacity-75 border px-0.5 rounded border-current shrink-0 text-[0.9em]">
-                                                                        {t.category}
-                                                                    </span>
-                                                                    <span className="truncate">{t.desc}</span>
+                                                    <div className="flex-1 flex flex-col justify-end gap-1 overflow-hidden pb-1">
+                                                        <div className="hidden sm:flex flex-col gap-1 overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100">
+                                                            {dayTransactions.slice(0, 3).map((t, i) => (
+                                                                <div key={t.id} className={`text-[10px] truncate px-1.5 py-0.5 rounded-sm border-l-2 ${t.type === 'income' ? 'border-blue-500 bg-blue-500/5 text-blue-600 dark:text-blue-400' : 'border-rose-500 bg-rose-500/5 text-rose-600 dark:text-rose-400'}`}>
+                                                                    {t.desc}
                                                                 </div>
-                                                                <span>{formatCompactNumber(t.amount)}</span>
-                                                            </div>
-                                                        ))}
+                                                            ))}
+                                                            {dayTransactions.length > 3 && <div className="text-[9px] text-gray-400 text-center">+{dayTransactions.length - 3}개 더보기</div>}
+                                                        </div>
+                                                        {/* Mobile Dots */}
+                                                        <div className="sm:hidden flex gap-0.5 flex-wrap justify-end content-end h-full">
+                                                            {dayTransactions.map((t, i) => (
+                                                                <div key={i} className={`w-1.5 h-1.5 rounded-full ${t.type === 'income' ? 'bg-blue-500' : 'bg-rose-500'}`}></div>
+                                                            ))}
+                                                        </div>
+                                                        <div className={`text-[10px] sm:text-xs text-right font-medium mt-auto ${currentBalance < 0 ? 'text-rose-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                                                            {formatCompactNumber(currentBalance)}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* 리스트, 통계, 연간 뷰 생략 (이전 버전과 동일하게 유지) */}
-                        {activeTab === 'list' && (
-                            <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
-                                <div className="space-y-3">
-                                    {transactions.filter(t => t.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => (
-                                        <div key={t.id} className={`flex justify-between items-center p-3 rounded border ${theme.border} ${theme.bg}`}>
-                                            <div>
-                                                <p className={`text-[0.8em] ${theme.subText} mb-0.5`}>{t.date}</p>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-[0.8em] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-400`}>{t.mainCategory || '기타'}</span>
-                                                    <span className={`text-[0.8em] px-1.5 py-0.5 rounded border ${t.type === 'income' ? 'border-blue-500 text-blue-500' : 'border-rose-500 text-rose-500'}`}>{t.category}</span>
+                            {/* 2. List View */}
+                            {activeTab === 'list' && (
+                                <div className={`rounded-2xl shadow-sm border p-0 sm:p-2 ${theme.card} animate-fade-in`}>
+                                    <div className="flex flex-col gap-2">
+                                        {transactions
+                                            .filter(t => t.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`))
+                                            .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                            .map((t, index, array) => {
+                                                const showDateHeader = index === 0 || t.date !== array[index - 1].date;
+                                                return (
+                                                    <div key={t.id}>
+                                                        {showDateHeader && (
+                                                            <div className={`sticky top-16 z-10 px-4 py-2 text-sm font-bold ${isDarkMode ? 'bg-neutral-900/90 text-gray-400' : 'bg-gray-100/90 text-gray-600'} backdrop-blur-sm border-y ${theme.border} mt-2 first:mt-0`}>
+                                                                {t.date}
+                                                            </div>
+                                                        )}
+                                                        <div className={`mx-2 sm:mx-4 p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800/50 rounded-xl transition-colors group flex items-center justify-between border-b ${theme.border} last:border-0 border-dashed`}>
+                                                            <div className="flex items-center gap-4 overflow-hidden">
+                                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${t.type === 'income' ? 'bg-blue-500/10 text-blue-600' : 'bg-rose-500/10 text-rose-600'}`}>
+                                                                    {t.type === 'income' ? <TrendingUp size={18}/> : <TrendingDown size={18}/>}
+                                                                </div>
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 dark:bg-neutral-800 text-gray-500`}>{t.mainCategory || '기타'}</span>
+                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium border ${t.type === 'income' ? 'border-blue-500/30 text-blue-500' : 'border-rose-500/30 text-rose-500'}`}>{t.category}</span>
+                                                                    </div>
+                                                                    <p className={`text-sm font-semibold truncate ${theme.cardText}`}>{t.desc}</p>
+                                                                    {t.memo && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><StickyNote size={10}/> {t.memo}</p>}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                <span className={`text-base font-bold ${t.type === 'income' ? 'text-blue-500' : 'text-rose-500'}`}>
+                                                                    {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, currency)}
+                                                                </span>
+                                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button onClick={() => handleEditClick(t)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"><Pencil size={14}/></button>
+                                                                    <button onClick={() => handleDelete(t.id)} className="p-1.5 text-gray-400 hover:text-rose-500 rounded-md hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"><Trash2 size={14}/></button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                        })}
+                                        {transactions.filter(t => t.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).length === 0 && (
+                                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                                <div className="w-16 h-16 bg-gray-100 dark:bg-neutral-800 rounded-full flex items-center justify-center mb-4 text-gray-300 dark:text-neutral-600">
+                                                    <List size={32} />
                                                 </div>
-                                                {t.memo && <p className="text-[0.8em] text-gray-500 mt-1 flex items-center gap-1"><StickyNote size={10}/> {t.memo}</p>}
-                                                <p className={`font-medium ${theme.cardText}`}>{t.desc}</p>
+                                                <p>이번 달 거래 내역이 없습니다.</p>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className={`font-bold ${t.type === 'income' ? theme.incomeText : theme.expenseText}`}>{t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount, currency)}</span>
-                                                <div className="flex gap-2"><button onClick={() => handleEditClick(t)} className="text-gray-400"><Pencil size={16}/></button><button onClick={() => handleDelete(t.id)} className="text-gray-400"><X size={16}/></button></div>
-                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 3. Stats View */}
+                            {activeTab === 'stats' && (
+                                <div className="space-y-6 animate-fade-in">
+                                    {/* Summary Bar */}
+                                    <div className={`rounded-2xl shadow-sm border p-6 ${theme.card}`}>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className={`font-bold text-lg flex items-center gap-2 ${theme.cardText}`}>
+                                                <Scale size={20} className="text-gray-400"/>
+                                                수지 현황
+                                            </h3>
+                                            <span className={`text-xl font-bold ${categoryStats.finalBalance >= 0 ? theme.incomeText : theme.expenseText}`}>
+                                                {formatCurrency(categoryStats.finalBalance, currency)}
+                                            </span>
                                         </div>
-                                    ))}
-                                    {transactions.filter(t => t.date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).length === 0 && <div className={`text-center py-10 ${theme.subText}`}>내역 없음</div>}
-                                </div>
-                            </div>
-                        )}
+                                        <div className="relative h-6 bg-gray-100 dark:bg-neutral-800 rounded-full overflow-hidden mb-3">
+                                            <div className="absolute left-0 top-0 h-full bg-blue-500 transition-all duration-500" style={{ width: `${categoryStats.totalRevenue > 0 ? (categoryStats.totalRevenue / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}></div>
+                                            <div className="absolute right-0 top-0 h-full bg-rose-500 transition-all duration-500" style={{ width: `${categoryStats.monthlyExpense > 0 ? (categoryStats.monthlyExpense / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}></div>
+                                        </div>
+                                        <div className="flex justify-between text-xs sm:text-sm font-medium">
+                                            <span className="text-blue-500">가용 (이월+수입) {formatCurrency(categoryStats.totalRevenue, currency)}</span>
+                                            <span className="text-rose-500">지출 {formatCurrency(categoryStats.monthlyExpense, currency)}</span>
+                                        </div>
+                                    </div>
 
-                        {activeTab === 'stats' && (
-                            <div className="space-y-6 animate-in fade-in zoom-in duration-200">
-                                <div className={`rounded-xl shadow border p-5 ${theme.card}`}>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h3 className={`font-bold flex items-center gap-2 ${theme.cardText}`}><Scale size={18} className="text-gray-400"/>이번 달 수지</h3>
-                                        <span className={`text-lg font-bold ${categoryStats.finalBalance >= 0 ? theme.incomeText : theme.expenseText}`}>{formatCurrency(categoryStats.finalBalance, currency)}</span>
-                                    </div>
-                                    <div className="relative h-4 bg-neutral-800 rounded-full overflow-hidden mb-2">
-                                        <div className="absolute left-0 top-0 h-full bg-blue-500" style={{ width: `${categoryStats.totalRevenue > 0 ? (categoryStats.totalRevenue / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}></div>
-                                        <div className="absolute right-0 top-0 h-full bg-rose-500" style={{ width: `${categoryStats.monthlyExpense > 0 ? (categoryStats.monthlyExpense / (categoryStats.totalRevenue + categoryStats.monthlyExpense)) * 100 : 0}%` }}></div>
-                                    </div>
-                                    <div className="flex justify-between text-[0.8em]">
-                                        <span className="text-blue-500">가용(총수입) {formatCurrency(categoryStats.totalRevenue, currency)}</span>
-                                        <span className="text-rose-500">지출 {formatCurrency(categoryStats.monthlyExpense, currency)}</span>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
-                                        <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingDown size={18} className="text-rose-500"/>지출 분석</h3>
-                                        <div className="space-y-4">
-                                            {categoryStats.expense.map((main) => (
-                                                <div key={main.name} className="space-y-2">
-                                                    <div className="flex justify-between items-end border-b border-neutral-800 pb-1">
-                                                        <span className={`font-bold ${theme.cardText}`}>{main.name}</span>
-                                                        <div className="flex gap-2 items-end">
-                                                            {renderComparison(main.total, main.prev, 'expense')}
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        {/* Expense Stats */}
+                                        <div className={`rounded-2xl shadow-sm border p-6 ${theme.card}`}>
+                                            <h3 className={`font-bold mb-6 flex items-center gap-2 text-lg ${theme.cardText}`}>
+                                                <div className="p-1.5 bg-rose-500/10 rounded-lg text-rose-500"><TrendingDown size={18} /></div>
+                                                지출 분석
+                                            </h3>
+                                            <div className="space-y-6">
+                                                {categoryStats.expense.map((main) => (
+                                                    <div key={main.name} className="space-y-3">
+                                                        <div className="flex justify-between items-end pb-2 border-b border-gray-100 dark:border-neutral-800">
+                                                            <span className={`font-bold ${theme.cardText}`}>{main.name}</span>
                                                             <span className={`${theme.expenseText} font-bold`}>{formatCurrency(main.total, currency)}</span>
                                                         </div>
-                                                    </div>
-                                                    <div className="space-y-1.5 pl-2 border-l-2 border-neutral-800 ml-1">
-                                                        {main.subs.map((sub) => (
-                                                            <div key={sub.name}>
-                                                                <div className="flex justify-between items-end text-[0.9em]">
-                                                                    <span className={theme.subText}>{sub.name}</span>
-                                                                    <span className={theme.cardText}>{formatCurrency(sub.total, currency)}</span>
+                                                        <div className="space-y-3 pl-2">
+                                                            {main.subs.map((sub) => (
+                                                                <div key={sub.name}>
+                                                                    <div className="flex justify-between items-end text-sm mb-1.5">
+                                                                        <span className={theme.subText}>{sub.name}</span>
+                                                                        <span className={theme.cardText}>{formatCurrency(sub.total, currency)}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-gray-100 dark:bg-neutral-800 rounded-full h-2 overflow-hidden">
+                                                                        <div className="bg-rose-500 h-2 rounded-full opacity-80" style={{ width: `${main.total > 0 ? (sub.total / main.total) * 100 : 0}%` }}></div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden mt-0.5">
-                                                                    <div className="bg-rose-500/50 h-1.5 rounded-full" style={{ width: `${main.total > 0 ? (sub.total / main.total) * 100 : 0}%` }}></div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {categoryStats.expense.length === 0 && <p className={`text-center py-4 ${theme.subText}`}>지출 내역이 없습니다.</p>}
-                                        </div>
-                                    </div>
-
-                                    <div className={`rounded-xl shadow border p-4 ${theme.card}`}>
-                                        <h3 className={`font-bold mb-4 flex items-center gap-2 ${theme.cardText}`}><TrendingUp size={18} className="text-blue-500"/>수입 분석</h3>
-                                        <div className="space-y-4">
-                                            {categoryStats.income.map((main) => (
-                                                <div key={main.name} className="space-y-2">
-                                                    <div className="flex justify-between items-end border-b border-neutral-800 pb-1">
-                                                        <span className={`font-bold ${theme.cardText}`}>{main.name}</span>
-                                                        <div className="flex gap-2 items-end">
-                                                            {renderComparison(main.total, main.prev, 'income')}
-                                                            <span className={`${theme.incomeText} font-bold`}>{formatCurrency(main.total, currency)}</span>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-1.5 pl-2 border-l-2 border-neutral-800 ml-1">
-                                                        {main.subs.map((sub) => (
-                                                            <div key={sub.name}>
-                                                                <div className="flex justify-between items-end text-[0.9em]">
-                                                                    <span className={theme.subText}>{sub.name}</span>
-                                                                    <span className={theme.cardText}>{formatCurrency(sub.total, currency)}</span>
+                                                ))}
+                                                {categoryStats.expense.length === 0 && <p className="text-center py-10 text-gray-400">지출 내역이 없습니다.</p>}
+                                            </div>
+                                        </div>
+
+                                        {/* Income Stats */}
+                                        <div className={`rounded-2xl shadow-sm border p-6 ${theme.card}`}>
+                                            <h3 className={`font-bold mb-6 flex items-center gap-2 text-lg ${theme.cardText}`}>
+                                                <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-500"><TrendingUp size={18} /></div>
+                                                수입 분석
+                                            </h3>
+                                            <div className="space-y-6">
+                                                {categoryStats.income.map((main) => (
+                                                    <div key={main.name} className="space-y-3">
+                                                        <div className="flex justify-between items-end pb-2 border-b border-gray-100 dark:border-neutral-800">
+                                                            <span className={`font-bold ${theme.cardText}`}>{main.name}</span>
+                                                            <span className={`${theme.incomeText} font-bold`}>{formatCurrency(main.total, currency)}</span>
+                                                        </div>
+                                                        <div className="space-y-3 pl-2">
+                                                            {main.subs.map((sub) => (
+                                                                <div key={sub.name}>
+                                                                    <div className="flex justify-between items-end text-sm mb-1.5">
+                                                                        <span className={theme.subText}>{sub.name}</span>
+                                                                        <span className={theme.cardText}>{formatCurrency(sub.total, currency)}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-gray-100 dark:bg-neutral-800 rounded-full h-2 overflow-hidden">
+                                                                        <div className="bg-blue-500 h-2 rounded-full opacity-80" style={{ width: `${main.total > 0 ? (sub.total / main.total) * 100 : 0}%` }}></div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden mt-0.5">
-                                                                    <div className="bg-blue-500/50 h-1.5 rounded-full" style={{ width: `${main.total > 0 ? (sub.total / main.total) * 100 : 0}%` }}></div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                            {categoryStats.income.length === 0 && <p className={`text-center py-4 ${theme.subText}`}>수입 내역이 없습니다.</p>}
+                                                ))}
+                                                {categoryStats.income.length === 0 && <p className="text-center py-10 text-gray-400">수입 내역이 없습니다.</p>}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {activeTab === 'yearly' && (
-                            <div className={`rounded-xl shadow border p-2 animate-in fade-in zoom-in duration-200 ${theme.card}`}>
-                                <div className="flex justify-between items-center mb-4 px-2">
-                                    <h3 className={`font-bold flex items-center gap-2 ${theme.cardText}`}>
-                                        <Table2 size={18} className="text-gray-400"/>
-                                        {year}년 계층형 흐름
-                                    </h3>
-                                    <span className={`text-[0.9em] ${theme.subText}`}>1월 - 12월</span>
-                                </div>
-                                <div className="overflow-x-auto border border-neutral-800 rounded-lg">
-                                    <table className={`w-full ${currentTableFontSize} text-left table-fixed`}>
-                                        <thead className={`bg-neutral-900 ${theme.subText}`}>
-                                            <tr>
-                                                <th className="px-1 py-2 border-r border-neutral-800 font-bold text-gray-300 w-[60px] max-w-[60px] whitespace-nowrap overflow-hidden text-ellipsis">구분</th>
-                                                {[...Array(12)].map((_, i) => <th key={i} className="px-0.5 py-2 text-center border-r border-neutral-800 last:border-0 w-[6%]">{i+1}</th>)}
-                                                <th className="px-1 py-2 text-right bg-neutral-900 border-l border-neutral-800 font-bold text-gray-300 w-[13%]">합계</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className={`divide-y divide-neutral-800 ${theme.cardText}`}>
-                                            <tr className="bg-neutral-800/80 font-bold">
-                                                <td className="px-1 py-2 border-r border-neutral-700 text-gray-400 truncate">전월 이월</td>
-                                                {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-0.5 py-2 text-right border-r border-neutral-800 text-gray-400 truncate">{formatCompactNumber(stat.carryover)}</td>
-                                                ))}
-                                                <td className="px-1 py-2 text-right border-l border-neutral-700 text-gray-400">-</td>
-                                            </tr>
-                                            <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-1 py-2 border-r border-neutral-700 text-blue-400 truncate">월 수입</td>
-                                                {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-0.5 py-2 text-right border-r border-neutral-800 text-blue-400 truncate">{formatCompactNumber(stat.income)}</td>
-                                                ))}
-                                                <td className="px-1 py-2 text-right border-l border-neutral-700 text-blue-400 truncate">
-                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.income, 0))}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-neutral-800/50 font-bold">
-                                                <td className="px-1 py-2 border-r border-neutral-700 text-rose-400 truncate">월 지출</td>
-                                                {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className="px-0.5 py-2 text-right border-r border-neutral-800 text-rose-400 truncate">{formatCompactNumber(stat.expense)}</td>
-                                                ))}
-                                                <td className="px-1 py-2 text-right border-l border-neutral-700 text-rose-400 truncate">
-                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.expense, 0))}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-neutral-800/80 font-bold border-b-2 border-neutral-700">
-                                                <td className="px-1 py-2 border-r border-neutral-700 text-white truncate">월 잔액</td>
-                                                {yearlyStats.monthlyData.map((stat, i) => (
-                                                    <td key={i} className={`px-0.5 py-2 text-right border-r border-neutral-800 truncate ${stat.balance >= 0 ? 'text-blue-300' : 'text-rose-300'}`}>
-                                                        {formatCompactNumber(stat.balance)}
-                                                    </td>
-                                                ))}
-                                                <td className="px-1 py-2 text-right border-l border-neutral-700 text-white truncate">
-                                                    {formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.balance, 0))}
-                                                </td>
-                                            </tr>
-                                            <tr className="bg-blue-900/30 font-bold border-b border-blue-900"><td colSpan="14" className="px-1 py-2 text-blue-400 truncate pl-2">수입 내역</td></tr>
-                                            {Object.entries(yearlyStats.hierarchyData.income).map(([mainCat, data]) => (
-                                                <React.Fragment key={mainCat}>
-                                                    <tr className="bg-neutral-800/30 font-bold">
-                                                        <td className="px-1 py-2 border-r border-neutral-800 text-blue-200 pl-2 border-l-2 border-l-blue-500 truncate">{mainCat}</td>
-                                                        {data.monthly.map((amt, i) => (
-                                                            <td key={i} className="px-0.5 py-2 text-right border-r border-neutral-800 text-blue-200 truncate">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
-                                                        ))}
-                                                        <td className="px-1 py-2 text-right border-l border-neutral-800 text-blue-200 truncate">{formatCompactNumber(data.total)}</td>
-                                                    </tr>
-                                                    {Object.entries(data.subs).map(([subCat, subData]) => (
-                                                        <tr key={`${mainCat}-${subCat}`} className="hover:bg-neutral-800/50 text-neutral-400">
-                                                            <td className="px-1 py-1.5 border-r border-neutral-800 pl-4 truncate">{subCat}</td>
-                                                            {subData.monthly.map((amt, i) => (
-                                                                <td key={i} className="px-0.5 py-1.5 text-right border-r border-neutral-800 truncate">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
-                                                            ))}
-                                                            <td className="px-1 py-1.5 text-right border-l border-neutral-800 truncate">{formatCompactNumber(subData.total)}</td>
-                                                        </tr>
+                            {/* 4. Yearly View */}
+                            {activeTab === 'yearly' && (
+                                <div className={`rounded-2xl shadow-sm border p-4 sm:p-6 ${theme.card} animate-fade-in`}>
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className={`font-bold text-lg flex items-center gap-2 ${theme.cardText}`}>
+                                            <Table2 size={20} className="text-gray-400"/>
+                                            {year}년 연간 흐름
+                                        </h3>
+                                        <span className={`text-sm ${theme.subText} bg-gray-100 dark:bg-neutral-800 px-3 py-1 rounded-full`}>1월 - 12월</span>
+                                    </div>
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-neutral-800">
+                                        <table className={`w-full ${currentTableFontSize} text-left border-collapse min-w-[800px]`}>
+                                            <thead className="bg-gray-100 dark:bg-neutral-900 text-gray-500">
+                                                <tr>
+                                                    <th className="p-3 font-semibold border-b border-r border-gray-200 dark:border-neutral-800 sticky left-0 z-20 bg-gray-100 dark:bg-neutral-900 min-w-[80px]">구분</th>
+                                                    {[...Array(12)].map((_, i) => <th key={i} className="p-2 text-center font-medium border-b border-gray-200 dark:border-neutral-800 min-w-[60px]">{i+1}월</th>)}
+                                                    <th className="p-3 text-right font-bold border-b border-l border-gray-200 dark:border-neutral-800 min-w-[80px]">합계</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className={`divide-y divide-gray-100 dark:divide-neutral-800 ${theme.cardText}`}>
+                                                {/* Summary Rows */}
+                                                <tr className="bg-gray-50/50 dark:bg-neutral-800/30">
+                                                    <td className="p-2 font-bold sticky left-0 bg-gray-50/90 dark:bg-neutral-800/90 backdrop-blur-sm border-r border-gray-200 dark:border-neutral-800">월 수입</td>
+                                                    {yearlyStats.monthlyData.map((stat, i) => <td key={i} className="p-2 text-right text-blue-500">{formatCompactNumber(stat.income)}</td>)}
+                                                    <td className="p-2 text-right font-bold text-blue-500 border-l border-gray-200 dark:border-neutral-800">{formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.income, 0))}</td>
+                                                </tr>
+                                                <tr className="bg-gray-50/50 dark:bg-neutral-800/30">
+                                                    <td className="p-2 font-bold sticky left-0 bg-gray-50/90 dark:bg-neutral-800/90 backdrop-blur-sm border-r border-gray-200 dark:border-neutral-800">월 지출</td>
+                                                    {yearlyStats.monthlyData.map((stat, i) => <td key={i} className="p-2 text-right text-rose-500">{formatCompactNumber(stat.expense)}</td>)}
+                                                    <td className="p-2 text-right font-bold text-rose-500 border-l border-gray-200 dark:border-neutral-800">{formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.expense, 0))}</td>
+                                                </tr>
+                                                <tr className="font-bold bg-gray-100 dark:bg-neutral-900/50">
+                                                    <td className="p-2 sticky left-0 bg-gray-100 dark:bg-neutral-900 border-r border-gray-200 dark:border-neutral-800">월 잔액</td>
+                                                    {yearlyStats.monthlyData.map((stat, i) => (
+                                                        <td key={i} className={`p-2 text-right ${stat.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatCompactNumber(stat.balance)}</td>
                                                     ))}
-                                                </React.Fragment>
-                                            ))}
-                                            <tr className="bg-rose-900/30 font-bold border-b border-rose-900"><td colSpan="14" className="px-1 py-2 text-rose-400 truncate pl-2">지출 내역</td></tr>
-                                            {Object.entries(yearlyStats.hierarchyData.expense).map(([mainCat, data]) => (
-                                                <React.Fragment key={mainCat}>
-                                                    <tr className="bg-neutral-800/30 font-bold">
-                                                        <td className="px-1 py-2 border-r border-neutral-800 text-rose-200 pl-2 border-l-2 border-l-rose-500 truncate">{mainCat}</td>
-                                                        {data.monthly.map((amt, i) => (
-                                                            <td key={i} className="px-0.5 py-2 text-right border-r border-neutral-800 text-rose-200 truncate">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
-                                                        ))}
-                                                        <td className="px-1 py-2 text-right border-l border-neutral-800 text-rose-200 truncate">{formatCompactNumber(data.total)}</td>
-                                                    </tr>
-                                                    {Object.entries(data.subs).map(([subCat, subData]) => (
-                                                        <tr key={`${mainCat}-${subCat}`} className="hover:bg-neutral-800/50 text-neutral-400">
-                                                            <td className="px-1 py-1.5 border-r border-neutral-800 pl-4 truncate">{subCat}</td>
-                                                            {subData.monthly.map((amt, i) => (
-                                                                <td key={i} className="px-0.5 py-1.5 text-right border-r border-neutral-800 truncate">{amt > 0 ? formatCompactNumber(amt) : ''}</td>
-                                                            ))}
-                                                            <td className="px-1 py-1.5 text-right border-l border-neutral-800 truncate">{formatCompactNumber(subData.total)}</td>
+                                                    <td className="p-2 text-right border-l border-gray-200 dark:border-neutral-800">{formatCompactNumber(yearlyStats.monthlyData.reduce((a, b) => a + b.balance, 0))}</td>
+                                                </tr>
+                                                
+                                                {/* Detailed Rows Spacer */}
+                                                <tr><td colSpan="14" className="bg-gray-100 dark:bg-neutral-950 h-2"></td></tr>
+
+                                                {/* Detailed Breakdown */}
+                                                {Object.entries(yearlyStats.hierarchyData.expense).map(([mainCat, data]) => (
+                                                    <React.Fragment key={mainCat}>
+                                                        <tr className="bg-gray-50 dark:bg-neutral-800/20">
+                                                            <td className="p-2 font-semibold text-rose-600/80 sticky left-0 bg-gray-50 dark:bg-neutral-900 border-r border-gray-200 dark:border-neutral-800 pl-3 border-l-2 border-l-rose-500">{mainCat}</td>
+                                                            {data.monthly.map((amt, i) => <td key={i} className="p-2 text-right text-gray-400">{amt > 0 ? formatCompactNumber(amt) : ''}</td>)}
+                                                            <td className="p-2 text-right font-medium text-rose-500/80 border-l border-gray-200 dark:border-neutral-800">{formatCompactNumber(data.total)}</td>
                                                         </tr>
-                                                    ))}
-                                                </React.Fragment>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                        {Object.entries(data.subs).map(([subCat, subData]) => (
+                                                            <tr key={`${mainCat}-${subCat}`} className="hover:bg-gray-50 dark:hover:bg-neutral-800/30">
+                                                                <td className="p-2 pl-6 text-gray-500 sticky left-0 bg-white dark:bg-black border-r border-gray-200 dark:border-neutral-800">{subCat}</td>
+                                                                {subData.monthly.map((amt, i) => <td key={i} className="p-2 text-right text-gray-500">{amt > 0 ? formatCompactNumber(amt) : ''}</td>)}
+                                                                <td className="p-2 text-right text-gray-400 border-l border-gray-200 dark:border-neutral-800">{formatCompactNumber(subData.total)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </React.Fragment>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </main>
 
+                    {/* Modals & Dialogs */}
+                    
+                    {/* Date Details Bottom Sheet / Modal */}
                     {selectedDateDetail && (
-                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={() => setSelectedDateDetail(null)}>
-                            <div className={`rounded-xl shadow-xl w-full max-w-sm overflow-hidden ${theme.card}`} onClick={e => e.stopPropagation()}>
-                                <div className={`px-4 py-3 border-b flex justify-between items-center ${theme.border}`}><h3 className={`font-bold ${theme.cardText}`}>{selectedDateDetail.dateStr}</h3><button onClick={() => setSelectedDateDetail(null)} className={theme.subText}><X size={20} /></button></div>
-                                <div className="max-h-[50vh] overflow-y-auto p-2 space-y-2">
+                        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto transition-opacity" onClick={() => setSelectedDateDetail(null)}></div>
+                            <div className={`pointer-events-auto w-full max-w-md mx-auto sm:rounded-2xl rounded-t-2xl shadow-2xl transform transition-transform duration-300 max-h-[80vh] flex flex-col ${theme.card}`} onClick={e => e.stopPropagation()}>
+                                <div className="p-4 border-b border-gray-100 dark:border-neutral-800 flex justify-between items-center sticky top-0 z-10 bg-inherit rounded-t-2xl">
+                                    <h3 className={`font-bold text-lg ${theme.cardText} flex items-center gap-2`}>
+                                        <CalendarIcon size={20} className="text-blue-500" />
+                                        {selectedDateDetail.dateStr}
+                                    </h3>
+                                    <button onClick={() => setSelectedDateDetail(null)} className={`p-2 rounded-full ${theme.hover} text-gray-500`}><X size={20} /></button>
+                                </div>
+                                <div className="p-4 overflow-y-auto space-y-3 flex-1">
                                     {selectedDateDetail.items.map(t => (
-                                        <div key={t.id} className={`flex justify-between items-center p-3 rounded border ${theme.border} ${theme.bg}`}>
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border border-neutral-700 text-neutral-400`}>{t.mainCategory || '기타'}</span>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${t.type === 'income' ? 'border-blue-500 text-blue-500' : 'border-rose-500 text-rose-500'}`}>{t.category}</span>
+                                        <div key={t.id} className={`flex justify-between items-center p-4 rounded-xl border ${theme.border} ${theme.bg}`}>
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className={`p-2 rounded-lg shrink-0 ${t.type === 'income' ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                                    {t.type === 'income' ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
                                                 </div>
-                                                <p className={`font-medium ${theme.cardText}`}>{t.desc}</p>
-                                                {t.memo && <p className="text-[10px] text-gray-500 mt-1">📝 {t.memo}</p>}
+                                                <div className="min-w-0">
+                                                    <div className="flex gap-1.5 mb-1">
+                                                        <span className="text-[10px] bg-gray-100 dark:bg-neutral-800 text-gray-500 px-1.5 py-0.5 rounded">{t.mainCategory}</span>
+                                                        <span className="text-[10px] border border-gray-200 dark:border-neutral-700 text-gray-500 px-1.5 py-0.5 rounded">{t.category}</span>
+                                                    </div>
+                                                    <p className={`font-medium truncate ${theme.cardText}`}>{t.desc}</p>
+                                                    {t.memo && <p className="text-xs text-gray-400 mt-0.5">{t.memo}</p>}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2"><span className={`font-bold ${t.type === 'income' ? theme.incomeText : theme.expenseText}`}>{formatCurrency(t.amount, currency)}</span><button onClick={() => handleEditClick(t)}><Pencil size={16} className="text-gray-400"/></button><button onClick={() => handleDelete(t.id)}><X size={16} className="text-gray-400"/></button></div>
+                                            <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                                                <span className={`font-bold ${t.type === 'income' ? 'text-blue-500' : 'text-rose-500'}`}>
+                                                    {formatCurrency(t.amount, currency)}
+                                                </span>
+                                                <div className="flex gap-1">
+                                                    <button onClick={() => handleEditClick(t)} className="text-gray-400 hover:text-blue-500 p-1"><Pencil size={14}/></button>
+                                                    <button onClick={() => handleDelete(t.id)} className="text-gray-400 hover:text-rose-500 p-1"><Trash2 size={14}/></button>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
-                                    {selectedDateDetail.items.length === 0 && <div className={`text-center py-4 ${theme.subText}`}>내역 없음</div>}
+                                    {selectedDateDetail.items.length === 0 && <div className="text-center py-8 text-gray-400">내역 없음</div>}
                                 </div>
-                                <div className="p-2 border-t border-gray-100 dark:border-neutral-800"><button onClick={() => { setEditingId(null); setIsModalOpen(true); setNewTrans(prev => ({...prev, date: selectedDateDetail.dateStr, amount: '', desc: ''})); setSelectedDateDetail(null); }} className="w-full py-3 rounded-lg border border-dashed border-blue-500/30 text-blue-500 text-sm flex items-center justify-center gap-2"><Plus size={16} /> 추가하기</button></div>
+                                <div className="p-4 border-t border-gray-100 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50 rounded-b-2xl">
+                                    <button onClick={() => { setEditingId(null); setIsModalOpen(true); setNewTrans(prev => ({...prev, date: selectedDateDetail.dateStr, amount: '', desc: ''})); setSelectedDateDetail(null); }} className={`w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 ${theme.accent}`}>
+                                        <Plus size={18} strokeWidth={3} /> 이 날짜에 추가하기
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
 
+                    {/* Settings Modal */}
                     {isSettingsOpen && (
-                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                            <div className={`rounded-xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col max-h-[80vh] ${theme.card}`}>
-                                <div className={`px-4 py-3 border-b flex justify-between items-center ${theme.border}`}><h3 className={`font-bold ${theme.cardText}`}>설정</h3><button onClick={() => setIsSettingsOpen(false)} className={theme.subText}><X size={20} /></button></div>
-                                <div className={`flex border-b ${theme.border}`}>
-                                    <button onClick={() => setSettingsTab('general')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'general' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>기본 설정</button>
-                                    <button onClick={() => setSettingsTab('main_category')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'main_category' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>대항목 관리</button>
-                                    <button onClick={() => setSettingsTab('sub_category')} className={`flex-1 py-3 text-sm font-medium ${settingsTab === 'sub_category' ? 'text-blue-500 border-b-2 border-blue-500' : theme.subText}`}>소항목 관리</button>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)}></div>
+                            <div className={`relative w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${theme.card}`}>
+                                <div className="px-6 py-4 border-b border-gray-100 dark:border-neutral-800 flex justify-between items-center">
+                                    <h3 className={`font-bold text-lg ${theme.cardText}`}>설정</h3>
+                                    <button onClick={() => setIsSettingsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
                                 </div>
-                                <div className="p-4 space-y-4 overflow-y-auto">
+                                <div className="flex border-b border-gray-100 dark:border-neutral-800">
+                                    {['general', 'main_category', 'sub_category'].map(tab => (
+                                        <button 
+                                            key={tab}
+                                            onClick={() => setSettingsTab(tab)} 
+                                            className={`flex-1 py-3 text-sm font-medium transition-colors ${settingsTab === tab ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/10' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                                        >
+                                            {tab === 'general' ? '기본' : tab === 'main_category' ? '대항목' : '소항목'}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-6">
                                     {settingsTab === 'general' ? (
                                         <>
-                                            <div className="pb-4 border-b border-gray-200 dark:border-neutral-800">
-                                                <h4 className={`text-sm font-bold mb-2 ${theme.cardText}`}>백업/복원</h4>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button onClick={handleExport} className={`flex flex-col items-center p-2 rounded border border-dashed ${theme.border} ${theme.subText}`}><Download size={16} /><span className="text-xs mt-1">저장</span></button>
-                                                    <label className={`flex flex-col items-center p-2 rounded border border-dashed ${theme.border} ${theme.subText}`}><Upload size={16} /><span className="text-xs mt-1">복원</span><input type="file" accept=".json" onChange={handleImport} className="hidden" /></label>
+                                            <div>
+                                                <h4 className={`text-sm font-bold mb-3 flex items-center gap-2 ${theme.cardText}`}><Download size={16}/> 데이터 백업/복원</h4>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button onClick={handleExport} className={`flex flex-col items-center justify-center p-4 rounded-xl border border-dashed hover:border-blue-500 hover:text-blue-500 transition-colors ${theme.border} ${theme.subText}`}>
+                                                        <Download size={24} className="mb-2" />
+                                                        <span className="text-xs font-medium">백업 파일 저장</span>
+                                                    </button>
+                                                    <label className={`flex flex-col items-center justify-center p-4 rounded-xl border border-dashed hover:border-blue-500 hover:text-blue-500 transition-colors cursor-pointer ${theme.border} ${theme.subText}`}>
+                                                        <Upload size={24} className="mb-2" />
+                                                        <span className="text-xs font-medium">데이터 복원</span>
+                                                        <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                                                    </label>
                                                 </div>
                                             </div>
-                                            <div><label className={`text-xs block mb-1 ${theme.subText}`}>기초 잔액</label><input type="number" value={initialBalance} onChange={(e) => setInitialBalance(Number(e.target.value))} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
-                                            <div><label className={`text-xs block mb-1 ${theme.subText}`}>통화</label><div className="flex gap-2"><button onClick={() => setCurrency('KRW')} className={`flex-1 py-2 text-sm border rounded ${currency === 'KRW' ? 'bg-blue-600 text-white' : theme.input}`}>원 (₩)</button><button onClick={() => setCurrency('CNY')} className={`flex-1 py-2 text-sm border rounded ${currency === 'CNY' ? 'bg-blue-600 text-white' : theme.input}`}>위안 (¥)</button></div></div>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label className={`text-xs font-bold uppercase tracking-wider mb-2 block ${theme.subText}`}>기초 잔액 설정</label>
+                                                    <input type="number" value={initialBalance} onChange={(e) => setInitialBalance(Number(e.target.value))} className={`w-full rounded-lg border px-4 py-3 text-sm outline-none transition-all focus:ring-2 focus:ring-blue-500/20 ${theme.input}`} />
+                                                </div>
+                                                <div>
+                                                    <label className={`text-xs font-bold uppercase tracking-wider mb-2 block ${theme.subText}`}>통화 단위</label>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <button onClick={() => setCurrency('KRW')} className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${currency === 'KRW' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.border} ${theme.cardText} hover:bg-gray-50 dark:hover:bg-neutral-800`}`}>원 (KRW)</button>
+                                                        <button onClick={() => setCurrency('CNY')} className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${currency === 'CNY' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : `${theme.border} ${theme.cardText} hover:bg-gray-50 dark:hover:bg-neutral-800`}`}>위안 (CNY)</button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </>
                                     ) : (
                                         renderCategoryManager(settingsTab === 'main_category')
                                     )}
                                 </div>
-                                <div className={`p-4 border-t ${theme.border}`}><button onClick={() => setIsSettingsOpen(false)} className="w-full bg-blue-600 text-white py-2 rounded">닫기</button></div>
                             </div>
                         </div>
                     )}
 
+                    {/* Transaction Add/Edit Modal */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                            <div className={`rounded-xl shadow-xl w-full max-w-sm overflow-hidden ${theme.card}`}>
-                                <div className={`px-4 py-3 border-b flex justify-between items-center ${theme.border}`}><h3 className={`font-bold ${theme.cardText}`}>{editingId ? '수정' : '추가'}</h3><button onClick={() => setIsModalOpen(false)} className={theme.subText}><X size={20} /></button></div>
-                                <form onSubmit={handleSaveTransaction} className="p-4 space-y-3">
-                                    <div className="flex gap-2">
-                                        <div className="flex-1"><label className={`text-xs block mb-1 ${theme.subText}`}>날짜</label><input type="date" required value={newTrans.date} onChange={(e) => setNewTrans({ ...newTrans, date: e.target.value })} className={`w-full rounded border px-2 py-2 text-sm ${theme.input}`} /></div>
-                                        <div className="flex-1"><label className={`text-xs block mb-1 ${theme.subText}`}>유형</label><div className="flex gap-1"><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'income' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'income' ? 'bg-blue-600 text-white' : theme.input}`}>수입</button><button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'expense' })} className={`flex-1 py-2 text-sm rounded ${newTrans.type === 'expense' ? 'bg-rose-600 text-white' : theme.input}`}>지출</button></div></div>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+                            <div className={`relative w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden ${theme.card}`}>
+                                <div className="px-6 py-4 border-b border-gray-100 dark:border-neutral-800 flex justify-between items-center">
+                                    <h3 className={`font-bold text-lg ${theme.cardText}`}>{editingId ? '거래 수정' : '새 거래 추가'}</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
+                                </div>
+                                <form onSubmit={handleSaveTransaction} className="p-6 space-y-5">
+                                    {/* Type Switcher */}
+                                    <div className="flex p-1 bg-gray-100 dark:bg-neutral-800 rounded-xl">
+                                        <button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'income' })} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${newTrans.type === 'income' ? 'bg-white dark:bg-neutral-700 text-blue-600 shadow-sm' : 'text-gray-400'}`}>수입</button>
+                                        <button type="button" onClick={() => setNewTrans({ ...newTrans, type: 'expense' })} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${newTrans.type === 'expense' ? 'bg-white dark:bg-neutral-700 text-rose-600 shadow-sm' : 'text-gray-400'}`}>지출</button>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <label className={`text-xs block mb-1 ${theme.subText}`}>대항목</label>
-                                            <select value={newTrans.mainCategory} onChange={(e) => setNewTrans({ ...newTrans, mainCategory: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
+                                    
+                                    <div>
+                                        <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>날짜</label>
+                                        <input type="date" required value={newTrans.date} onChange={(e) => setNewTrans({ ...newTrans, date: e.target.value })} className={`w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`} />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>금액</label>
+                                        <div className="relative">
+                                            <input type="number" required min="0" placeholder="0" value={newTrans.amount} onChange={(e) => setNewTrans({ ...newTrans, amount: e.target.value })} className={`w-full rounded-lg border pl-4 pr-12 py-3 text-lg font-bold outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`} />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-500 font-medium">원</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>대항목</label>
+                                            <select value={newTrans.mainCategory} onChange={(e) => setNewTrans({ ...newTrans, mainCategory: e.target.value })} className={`w-full rounded-lg border px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`}>
                                                 {(newTrans.type === 'income' ? mainCategories.income : mainCategories.expense).map(cat => (
                                                     <option key={cat} value={cat}>{cat}</option>
                                                 ))}
                                             </select>
                                         </div>
-                                        <div className="flex-1">
-                                            <label className={`text-xs block mb-1 ${theme.subText}`}>소항목</label>
-                                            <select value={newTrans.category} onChange={(e) => setNewTrans({ ...newTrans, category: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`}>
+                                        <div>
+                                            <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>소항목</label>
+                                            <select value={newTrans.category} onChange={(e) => setNewTrans({ ...newTrans, category: e.target.value })} className={`w-full rounded-lg border px-3 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`}>
                                                 {(newTrans.type === 'income' ? categories.income : categories.expense).map(cat => (
                                                     <option key={cat} value={cat}>{cat}</option>
                                                 ))}
                                             </select>
                                         </div>
                                     </div>
-                                    <div><label className={`text-xs block mb-1 ${theme.subText}`}>금액</label><input type="number" required min="0" placeholder="0" value={newTrans.amount} onChange={(e) => setNewTrans({ ...newTrans, amount: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
-                                    <div><label className={`text-xs block mb-1 ${theme.subText}`}>내용</label><input type="text" required placeholder="내용 입력" value={newTrans.desc} onChange={(e) => setNewTrans({ ...newTrans, desc: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
-                                    <div><label className={`text-xs block mb-1 ${theme.subText}`}>메모</label><input type="text" placeholder="메모 (목록에만 표시됨)" value={newTrans.memo} onChange={(e) => setNewTrans({ ...newTrans, memo: e.target.value })} className={`w-full rounded border px-3 py-2 text-sm ${theme.input}`} /></div>
-                                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded mt-2">{editingId ? '수정 완료' : '저장'}</button>
+
+                                    <div>
+                                        <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>내용</label>
+                                        <input type="text" required placeholder="예: 점심 식사" value={newTrans.desc} onChange={(e) => setNewTrans({ ...newTrans, desc: e.target.value })} className={`w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`} />
+                                    </div>
+
+                                    <div>
+                                        <label className={`text-xs font-bold uppercase tracking-wider mb-1.5 block ${theme.subText}`}>메모 (선택)</label>
+                                        <input type="text" placeholder="추가 기록 사항..." value={newTrans.memo} onChange={(e) => setNewTrans({ ...newTrans, memo: e.target.value })} className={`w-full rounded-lg border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 ${theme.input}`} />
+                                    </div>
+
+                                    <button type="submit" className={`w-full py-3.5 rounded-xl font-bold text-base mt-2 shadow-lg shadow-blue-500/20 ${theme.accent}`}>
+                                        {editingId ? '수정 완료' : '저장하기'}
+                                    </button>
                                 </form>
                             </div>
                         </div>
