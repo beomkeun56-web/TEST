@@ -662,49 +662,46 @@
                                                     {isToday && <div className="absolute inset-0 border-2 border-blue-500/30 pointer-events-none z-0"></div>}
                                                     
                                                     {/* Calendar Cell Header */}
-                                                    <div className="flex justify-between items-start z-10">
-                                                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full shrink-0 ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isWeekend ? (idx % 7 === 0 ? 'text-rose-500' : 'text-blue-500') : theme.subText}`}>
+                                                    <div className="flex justify-between items-start z-10 mb-1">
+                                                        <span className={`text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full shrink-0 ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : isWeekend ? (idx % 7 === 0 ? 'text-rose-500' : 'text-blue-500') : theme.subText}`}>
                                                             {item.day}
                                                         </span>
                                                         
                                                         {/* Horizontal Stats Row: Income | Revenue | Expense */}
-                                                        <div className="flex flex-row flex-wrap justify-end gap-x-2 gap-y-0.5 items-baseline w-full pl-1">
+                                                        <div className="flex flex-wrap justify-end gap-x-1.5 items-baseline max-w-[calc(100%-1.5rem)]">
                                                             {/* Income (Blue) */}
-                                                            {dateStats?.income > 0 && <span className="text-[10px] sm:text-xs font-bold text-blue-500">+{formatCompactNumber(dateStats.income)}</span>}
+                                                            {dateStats?.income > 0 && <span className="text-[10px] font-bold text-blue-500">+{formatCompactNumber(dateStats.income)}</span>}
                                                             
-                                                            {/* Revenue / Prev+Income (White/Default) - Show if activity exists */}
+                                                            {/* Revenue (Available) */}
                                                             {(dateStats?.income > 0 || dateStats?.expense > 0) && (
-                                                                <span className="text-[10px] sm:text-xs font-bold text-gray-900 dark:text-gray-100">
+                                                                <span className="text-[10px] font-bold text-gray-900 dark:text-gray-100">
                                                                     {formatCompactNumber(revenue)}
                                                                 </span>
                                                             )}
                                                             
                                                             {/* Expense (Red) */}
-                                                            {dateStats?.expense > 0 && <span className="text-[10px] sm:text-xs font-bold text-rose-500">-{formatCompactNumber(dateStats.expense)}</span>}
+                                                            {dateStats?.expense > 0 && <span className="text-[10px] font-bold text-rose-500">-{formatCompactNumber(dateStats.expense)}</span>}
                                                         </div>
                                                     </div>
 
-                                                    <div className="flex-1 flex flex-col justify-end gap-1 overflow-hidden pb-1">
-                                                        <div className="hidden sm:flex flex-col gap-1 overflow-y-auto scrollbar-hide opacity-80 hover:opacity-100">
+                                                    <div className="flex-1 flex flex-col gap-0.5 overflow-hidden">
+                                                        <div className="hidden sm:flex flex-col gap-1 overflow-y-auto scrollbar-hide">
                                                             {dayTransactions.slice(0, 4).map((t, i) => (
-                                                                <div key={t.id} className="flex items-center justify-between text-[10px] w-full">
-                                                                    <div className="flex items-center gap-1 min-w-0 overflow-hidden flex-1">
-                                                                        {/* Category Box */}
-                                                                        <span className={`shrink-0 px-1 rounded-[3px] border ${t.type === 'income' ? 'border-blue-500/50 text-blue-500' : 'border-rose-500/50 text-rose-500'}`}>
+                                                                <div key={t.id} className={`flex items-center justify-between px-1.5 py-0.5 rounded-[4px] mb-0.5 ${t.type === 'income' ? 'bg-blue-500/20 dark:bg-blue-500/20' : 'bg-rose-500/20 dark:bg-rose-500/20'} dark:bg-opacity-30`}>
+                                                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                                         <span className={`shrink-0 text-[9px] px-1 rounded-[3px] border ${t.type === 'income' ? 'border-blue-400 text-blue-600 dark:text-blue-300' : 'border-rose-400 text-rose-600 dark:text-rose-300'}`}>
                                                                             {t.category}
-                                                                        </span>
-                                                                        {/* Content */}
-                                                                        <span className={`truncate ${theme.cardText}`}>
+                                                                         </span>
+                                                                         <span className="truncate text-[10px] text-gray-700 dark:text-gray-200 font-medium">
                                                                             {t.desc}
-                                                                        </span>
+                                                                         </span>
                                                                     </div>
-                                                                    {/* Amount */}
-                                                                    <span className={`shrink-0 ml-1 font-medium ${t.type === 'income' ? 'text-blue-500' : 'text-rose-500'}`}>
+                                                                    <span className={`text-[10px] ml-1 ${t.type === 'income' ? 'text-blue-600 dark:text-blue-300' : 'text-rose-600 dark:text-rose-300'}`}>
                                                                         {formatCompactNumber(t.amount)}
                                                                     </span>
                                                                 </div>
                                                             ))}
-                                                            {dayTransactions.length > 4 && <div className="text-[9px] text-gray-400 text-center">+{dayTransactions.length - 4}개 더보기</div>}
+                                                            {dayTransactions.length > 4 && <div className="text-[9px] text-gray-400 text-center">+{dayTransactions.length - 4}개</div>}
                                                         </div>
                                                         {/* Mobile Dots */}
                                                         <div className="sm:hidden flex gap-0.5 flex-wrap justify-end content-end h-full">
