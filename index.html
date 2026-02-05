@@ -66,7 +66,7 @@
         import { createRoot } from 'react-dom/client';
         import { ChevronLeft, ChevronRight, Plus, Minus, X, Wallet, TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Moon, Sun, List, LayoutGrid, Download, Upload, Pencil, PieChart, BarChart3, Trash2, Scale, Layers, LineChart, Table2, StickyNote, FolderTree, Tag, ArrowRight, MoreHorizontal } from 'lucide-react';
 
-        const APP_VERSION = "v3.5.4 Dashboard Fix";
+        const APP_VERSION = "v3.5.5 Final Polish";
         
         const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl'];
         const FONT_LABELS = ['80%', '90%', '100%', '110%', '120%', '130%', '140%', '150%'];
@@ -532,9 +532,9 @@
                         {/* 1. Dashboard Grid - UPDATED: Horizontal Scroll Layout on Mobile */}
                         <div className="flex md:grid md:grid-cols-3 gap-4 mb-8 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2 md:pb-0">
                             {/* Card 1: Final Balance */}
-                            <div className="min-w-[85%] md:min-w-0 snap-center rounded-2xl p-6 relative overflow-hidden group border transition-all ${isDarkMode ? 'bg-gradient-to-br from-neutral-900 to-neutral-800 border-neutral-800' : 'bg-white border-gray-100 shadow-xl shadow-gray-200/50'}">
-                                <div className="relative z-10">
-                                    <div className="flex justify-between items-start mb-4">
+                            <div className="min-w-[85%] md:min-w-0 snap-center rounded-2xl p-4 relative overflow-hidden group border transition-all ${isDarkMode ? 'bg-gradient-to-br from-neutral-900 to-neutral-800 border-neutral-800' : 'bg-white border-gray-100 shadow-xl shadow-gray-200/50'}">
+                                <div className="relative z-10 h-full flex flex-col justify-center">
+                                    <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className={`text-sm font-medium ${theme.subText} mb-1`}>이번 달 최종 잔액</p>
                                             <h2 className={`text-2xl sm:text-3xl font-bold tracking-tight ${categoryStats.finalBalance >= 0 ? 'text-blue-500' : 'text-rose-500'}`}>
@@ -545,15 +545,12 @@
                                             <Wallet size={24} />
                                         </div>
                                     </div>
-                                    <div className="pt-4 border-t border-dashed border-gray-200 dark:border-neutral-700 flex justify-between items-center text-sm">
-                                        <span className={theme.subText}>전체 누적 자산</span>
-                                        <span className={`font-semibold ${allTimeStats.balance >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-rose-500'}`}>{formatCurrency(allTimeStats.balance, currency)}</span>
-                                    </div>
+                                    {/* Removed Cumulative Assets as requested */}
                                 </div>
                             </div>
 
                             {/* Card 2: Income */}
-                            <div className={`min-w-[85%] md:min-w-0 snap-center rounded-2xl p-6 border flex flex-col justify-center ${theme.card}`}>
+                            <div className={`min-w-[85%] md:min-w-0 snap-center rounded-2xl p-4 border flex flex-col justify-center ${theme.card}`}>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><TrendingUp size={18} /></div>
                                     <span className={`text-sm font-medium ${theme.subText}`}>이번 달 수입</span>
@@ -563,12 +560,13 @@
                                     <span className="text-sm text-gray-400">원</span>
                                 </div>
                                 <div className="mt-2 text-xs text-gray-500">
-                                    전월 이월: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCompactNumber(categoryStats.carryover)}</span>
+                                    {/* UPDATED: Full number format for Carryover */}
+                                    전월 이월: <span className="font-medium text-gray-700 dark:text-gray-300">{formatCurrency(categoryStats.carryover, currency).replace(/[^0-9.,-]/g, '')}</span>
                                 </div>
                             </div>
 
                             {/* Card 3: Expense (Removed Available Funds) */}
-                            <div className={`min-w-[85%] md:min-w-0 snap-center rounded-2xl p-6 border flex flex-col justify-center ${theme.card}`}>
+                            <div className={`min-w-[85%] md:min-w-0 snap-center rounded-2xl p-4 border flex flex-col justify-center ${theme.card}`}>
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><TrendingDown size={18} /></div>
                                     <span className={`text-sm font-medium ${theme.subText}`}>이번 달 지출</span>
